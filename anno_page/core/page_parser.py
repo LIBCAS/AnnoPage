@@ -5,6 +5,8 @@ import logging
 from pero_ocr.document_ocr.page_parser import LayoutExtractorYolo
 
 from anno_page.engines.captioning import DummyImageCaptioning
+from anno_page.engines.captioning import (DummyImageCaptioning, ChatGPTImageCaptioning, CaptionYoloNearestEngine,
+                                          CaptionYoloKeypointsEngine, CaptionYoloOrganizerEngine)
 
 
 def operation_factory(config, device, config_path):
@@ -21,6 +23,18 @@ def operation_factory(config, device, config_path):
     elif config['METHOD'] == 'DUMMY_IMAGE_CAPTIONING':
         logger.info("Creating DummyImageCaptioning engine")
         engine = DummyImageCaptioning(config, device, config_path=config_path)
+    elif config['METHOD'] == 'GPT_IMAGE_CAPTIONING':
+        logger.info("Creating GPTImageCaptioning engine")
+        engine = ChatGPTImageCaptioning(config, device, config_path=config_path)
+    elif config['METHOD'] == 'CAPTION_YOLO_NEAREST':
+        logger.info("Creating CaptionYoloNearestEngine engine")
+        engine = CaptionYoloNearestEngine(config, device, config_path=config_path)
+    elif config['METHOD'] == 'CAPTION_YOLO_ORGANIZER':
+        logger.info("Creating CaptionYoloOrganizerEngine engine")
+        engine = CaptionYoloOrganizerEngine(config, device, config_path=config_path)
+    elif config['METHOD'] == 'CAPTION_YOLO_KEYPOINTS':
+        logger.info("Creating CaptionYoloKeypointsEngine engine")
+        engine = CaptionYoloKeypointsEngine(config, device, config_path=config_path)
     else:
         logger.warning(f"Unknown operation method: {config['METHOD']}")
 
