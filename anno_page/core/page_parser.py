@@ -4,6 +4,7 @@ import logging
 
 from pero_ocr.document_ocr.page_parser import LayoutExtractorYolo
 
+from anno_page.engines.embedding import ClipEmbeddingEngine
 from anno_page.engines.captioning import DummyImageCaptioning
 
 
@@ -21,6 +22,9 @@ def operation_factory(config, device, config_path):
     elif config['METHOD'] == 'DUMMY_IMAGE_CAPTIONING':
         logger.info("Creating DummyImageCaptioning engine")
         engine = DummyImageCaptioning(config, device, config_path=config_path)
+    elif config['METHOD'] == 'CLIP_EMBEDDING':
+        logger.info("Creating ClipEmbedding engine")
+        engine = ClipEmbeddingEngine(config, device, config_path=config_path)
     else:
         logger.warning(f"Unknown operation method: {config['METHOD']}")
 
