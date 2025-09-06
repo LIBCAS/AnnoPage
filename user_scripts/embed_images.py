@@ -14,7 +14,8 @@ def parse_args():
     parser.add_argument("--model", type=str, help="Name of the SentenceTransformer model.", default="clip-ViT-L-14")
     parser.add_argument("--precision", type=int, help="Number of decimal places of the embeddings. If None, the output of the model is not changed.", default=None)
     parser.add_argument("--device", type=str, help="Processing device ('cpu' or 'cuda')", choices=['cpu', 'cuda'])
-    parser.add_argument("--output", type=str, help="Path to the output JSON file.")
+    parser.add_argument("--output", type=str, help="Path to the output JSON (JSON lines) file.")
+    parser.add_argument("--jsonlines", action='store_true', help="If set, the output is saved in JSON Lines format instead of a single JSON array.")
     args = parser.parse_args()
     return args
 
@@ -42,7 +43,10 @@ def main():
 
     if layout.embedding_data is not None:
         with open(args.output, 'w') as file:
-            file.write(layout.embedding_data.model_dump_json(indent=2))
+            if args.jsonlines:
+                file.write(layout.embedding_data.model_dump_jsonlines() + "\n")
+            else:
+                file.write(layout.embedding_data.model_dump_json(indent=2) + "\n")
 
         print(f"Embeddings saved to {args.output}")
     else:
