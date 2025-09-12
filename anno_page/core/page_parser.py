@@ -4,8 +4,8 @@ import logging
 
 from pero_ocr.document_ocr.page_parser import LayoutExtractorYolo
 
-from anno_page.engines.captioning import DummyImageCaptioning
-from anno_page.engines.captioning import (DummyImageCaptioning, ChatGPTImageCaptioning, CaptionYoloNearestEngine,
+from anno_page.engines.embedding import ClipEmbeddingEngine
+from anno_page.engines.captioning import (ChatGPTImageCaptioning, CaptionYoloNearestEngine,
                                           CaptionYoloKeypointsEngine, CaptionYoloOrganizerEngine)
 
 
@@ -20,9 +20,9 @@ def operation_factory(config, device, config_path):
     if config['METHOD'] == 'LAYOUT_YOLO':
         logger.info("Creating LayoutExtractorYolo engine")
         engine = LayoutExtractorYolo(config, device, config_path=config_path)
-    elif config['METHOD'] == 'DUMMY_IMAGE_CAPTIONING':
-        logger.info("Creating DummyImageCaptioning engine")
-        engine = DummyImageCaptioning(config, device, config_path=config_path)
+    elif config['METHOD'] == 'CLIP_EMBEDDING':
+        logger.info("Creating ClipEmbedding engine")
+        engine = ClipEmbeddingEngine(config, device, config_path=config_path)
     elif config['METHOD'] == 'GPT_IMAGE_CAPTIONING':
         logger.info("Creating GPTImageCaptioning engine")
         engine = ChatGPTImageCaptioning(config, device, config_path=config_path)

@@ -13,6 +13,7 @@ from multiprocessing import Pool
 from pero_ocr.core.layout import PageLayout, ALTOVersion
 
 from anno_page.core.layout import render_to_image
+from anno_page.core.embedding import ElementEmbeddings
 from anno_page.core.page_parser import PageParser
 
 
@@ -22,6 +23,8 @@ def parse_arguments():
     parser.add_argument("--input-image-path", help="Path to directory with images to process.")
     parser.add_argument("--output-alto-path", help="Path to directory where ALTO files will be saved.")
     parser.add_argument("--output-render-path", help="Path to directory where rendered images will be saved.")
+    parser.add_argument("--output-embeddings-path", help="Path to directory where embeddings will be saved.")
+    parser.add_argument("--jsonlines", action='store_true', help="If set, the output is saved in JSON Lines format instead of a single JSON array.")
     parser.add_argument('-s', '--skip-processed', action='store_true', required=False, help='If set, already processed files are skipped.')
 
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
@@ -110,11 +113,13 @@ def load_already_processed_files(directories):
 
 
 class Computator:
-    def __init__(self, page_parser, input_image_path, output_alto_path, output_render_path):
+    def __init__(self, page_parser, input_image_path, output_alto_path, output_embeddings_path, output_render_path, jsonlines=False):
         self.page_parser = page_parser
         self.input_image_path = input_image_path
         self.output_alto_path = output_alto_path
+        self.output_embeddings_path = output_embeddings_path
         self.output_render_path = output_render_path
+        self.jsonlines = jsonlines
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -135,6 +140,18 @@ class Computator:
 
             if self.output_alto_path is not None:
                 page_layout.to_altoxml(os.path.join(self.output_alto_path, file_id + '.xml'), version=ALTOVersion.ALTO_v4_4)
+
+            if self.output_embeddings_path is not None:
+                if page_layout.embedding_data is None:
+                    page_layout.embedding_data = ElementEmbeddings()
+
+                extension = 'jsonl' if self.jsonlines else 'json'
+                embeddings_file = os.path.join(self.output_embeddings_path, file_id + extension)
+                with open(embeddings_file, 'w') as file:
+                    if self.jsonlines:
+                        file.write(page_layout.embedding_data.model_dump_jsonlines() + "\n")
+                    else:
+                        file.write(page_layout.embedding_data.model_dump_json(indent=2) + "\n")
 
             if self.output_render_path is not None:
                 render = render_to_image(image, page_layout)
@@ -178,6 +195,9 @@ def main():
     if args.output_alto_path is not None:
         config['PARSE_FOLDER']['OUTPUT_ALTO_PATH'] = args.output_alto_path
 
+    if args.output_embeddings_path is not None:
+        config['PARSE_FOLDER']['OUTPUT_EMBEDDINGS_PATH'] = args.output_embeddings_path
+
     if args.output_render_path is not None:
         config['PARSE_FOLDER']['OUTPUT_RENDER_PATH'] = args.output_render_path
 
@@ -187,10 +207,16 @@ def main():
 
     input_image_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_IMAGE_PATH')
     output_alto_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_ALTO_PATH')
+    output_embeddings_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_EMBEDDINGS_PATH')
     output_render_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_RENDER_PATH')
+
+    jsonlines = args.jsonlines
 
     if output_alto_path is not None:
         create_dir_if_not_exists(output_alto_path)
+
+    if output_embeddings_path is not None:
+        create_dir_if_not_exists(output_embeddings_path)
 
     if output_render_path is not None:
         create_dir_if_not_exists(output_render_path)
@@ -214,7 +240,7 @@ def main():
             images_to_process = [image for id, image in zip(ids_to_process, images_to_process) if id not in already_processed_files]
             ids_to_process = [id for id in ids_to_process if id not in already_processed_files]
 
-    computator = Computator(page_parser, input_image_path, output_alto_path, output_render_path)
+    computator = Computator(page_parser, input_image_path, output_alto_path, output_embeddings_path, output_render_path, jsonlines=jsonlines)
 
     results = []
     if args.process_count > 1:
