@@ -4,6 +4,8 @@ from PIL import Image
 from datetime import datetime
 from sentence_transformers import SentenceTransformer
 
+from pero_ocr.utils import compose_path, config_get_list
+
 from anno_page.core.embedding import ElementEmbeddings, Element, ProcessingInfo
 
 
@@ -12,6 +14,7 @@ class ClipEmbeddingEngine:
         self.device = device
         self.model_name = config["MODEL"]
         self.precision = int(config["PRECISION"]) if "PRECISION" in config and config["PRECISION"] is not None else None
+        self.categories = config_get_list(config, key="categories", fallback=None)
 
         self.model = SentenceTransformer(self.model_name, device=device)
 
@@ -22,7 +25,7 @@ class ClipEmbeddingEngine:
         page_embeddings = page_layout.embedding_data
 
         for region in page_layout.regions:
-            if region.category is not None and region.category != "text":
+            if self.categories is None and region.category not in (None, 'text') or region.category in self.categories:
                 x_min, y_min, x_max, y_max = region.get_polygon_bounding_box()
                 region_image = page_image[y_min:y_max, x_min:x_max]
 
