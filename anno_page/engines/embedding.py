@@ -54,7 +54,6 @@ class ClipEmbeddingEngine:
                     )
                 )
 
-                region.embedding_data = region_embedding_data  # TODO: Why?
                 page_embeddings.append(region_embedding_data)
 
         return page_layout
