@@ -1,5 +1,6 @@
 import os
 import cv2
+import json
 import torch
 import base64
 import logging
@@ -289,15 +290,24 @@ class CaptionOrganizer:
 
 class ChatGPTImageCaptioning:
     def __init__(self, config, device, config_path):
+        self.config_path = config_path
+
         self.api_key = config["api_key"]
         self.max_image_size = config.getint('max_image_size', fallback=None)
         self.categories = config_get_list(config, key="categories", fallback=None)
         self.num_processes = config.getint('num_processes', fallback=1)
+        self.prompt_settings = compose_path(config["prompt_settings"], self.config_path)
 
-        api_key_path = os.path.join(config_path, self.api_key)
+        api_key_path = os.path.join(self.config_path, self.api_key)
         if os.path.exists(api_key_path):
             with open(api_key_path, 'r') as f:
                 self.api_key = f.read().strip()
+
+        with open(self.prompt_settings, 'r') as f:
+            prompt_settings = json.load(f)
+        self.prompt_model = prompt_settings.get("model", "gpt-4o-mini")
+        self.prompt_text = prompt_settings["text"]
+        self.prompt_max_tokens = prompt_settings.get("max_tokens", 500)
 
         self.logger = logging.getLogger(__name__)
 
@@ -379,23 +389,14 @@ class ChatGPTImageCaptioning:
         }
 
         payload = {
-            "model": "gpt-4o-mini",
+            "model": self.prompt_model,
             "messages": [
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": "For the given image, provide details about its content in the following format "
-                                    "(omit the 'less than' and 'greater than' symbols): <english-caption>|"
-                                    "<czech-caption>|<english-topics>|<czech-topics>|<english-color>|<czech-color>. "
-                                    "The <english-caption> and <czech-caption> should be a full sentences describing "
-                                    "the image in english and czech, respectively. The <english-topics> "
-                                    "and <czech-topics> should be comma-separated lists of topics in english and czech, "
-                                    "respectively. Select the <english-color> and <czech-color> from the following list "
-                                    "according to the appearance of the image in english and czech: "
-                                    "[black-and-white, grayscale, duotone, color] and [černobílý, šedotónový, "
-                                    "dvojbarevný, barevný]."
+                            "text": self.prompt_text
                         },
                         {
                             "type": "image_url",
@@ -406,7 +407,7 @@ class ChatGPTImageCaptioning:
                     ]
                 }
             ],
-            "max_tokens": 300
+            "max_tokens": self.prompt_max_tokens
         }
 
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
