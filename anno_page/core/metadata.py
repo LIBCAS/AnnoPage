@@ -171,6 +171,24 @@ class RelatedLinesMetadata(BaseMetadata):
 
         self._add_record_info_element(mods, mods_namespace, confidence=confidence)
 
+    def update(self, other):
+        if other is None:
+            return
+
+        description = self.description if self.description is not None else ""
+        title = self.title if self.title is not None else ""
+
+        existing_line_ids = {line.id for line in self.lines}
+        for line in other.lines:
+            if line.id not in existing_line_ids:
+                self.lines.append(line)
+
+        description += f" {other.description}" if other.description is not None else ""
+        title += f" {other.title}" if other.title is not None else ""
+
+        self.description = description.strip() if description else None
+        self.title = title.strip() if title else None
+
 
 class GraphicalObjectMetadata(BaseMetadata):
     def __init__(self, 
@@ -193,6 +211,37 @@ class GraphicalObjectMetadata(BaseMetadata):
 
         self.caption_lines_metadata = caption_lines_metadata
         self.reference_lines_metadata = reference_lines_metadata
+
+    def update(self, other, merge_caption_lines=True, merge_reference_lines=True):
+        if other is None:
+            return
+
+        if self.caption is None and other.caption is not None:
+            self.caption = other.caption
+        if self.topics is None and other.topics is not None:
+            self.topics = other.topics
+        if self.color is None and other.color is not None:
+            self.color = other.color
+        if self.description is None and other.description is not None:
+            self.description = other.description
+        if self.title is None and other.title is not None:
+            self.title = other.title
+
+        if self.caption_lines_metadata is None:
+            self.caption_lines_metadata = other.caption_lines_metadata
+        else:
+            if merge_caption_lines:
+                self.caption_lines_metadata.update(other.caption_lines_metadata)
+            else:
+                self.caption_lines_metadata = other.caption_lines_metadata
+
+        if self.reference_lines_metadata is None:
+            self.reference_lines_metadata = other.reference_lines_metadata
+        else:
+            if merge_reference_lines:
+                self.reference_lines_metadata.update(other.reference_lines_metadata)
+            else:
+                self.reference_lines_metadata = other.reference_lines_metadata
 
     def to_altoxml(self, tags, mods_namespace, category, bounding_box, confidence):
         self.graphics_to_altoxml(tags, mods_namespace, category, bounding_box, confidence)
