@@ -291,7 +291,7 @@ class ChatGPTImageCaptioning:
     def __init__(self, config, device, config_path):
         self.api_key = config["api_key"]
         self.max_image_size = config.getint('max_image_size', fallback=None)
-        self.categories = config.get("categories", fallback=None)
+        self.categories = config_get_list(config, key="categories", fallback=None)
         self.num_processes = config.getint('num_processes', fallback=1)
 
         api_key_path = os.path.join(config_path, self.api_key)
@@ -329,12 +329,15 @@ class ChatGPTImageCaptioning:
                         images.append(image)
                         regions.append(region)
 
-            with Pool(self.num_processes) as p:
-                image_captions = p.map(self.generate_image_caption, images)
+            if self.num_processes > 1:
+                with Pool(self.num_processes) as p:
+                    image_captions = p.map(self.generate_image_caption, images)
+            else:
+                image_captions = [self.generate_image_caption(image) for image in images]
 
             for region, image_caption in zip(regions, image_captions):
                 try:
-                    caption_en, caption_cz, topics_en, topics_cz, color_en, color_cz = image_caption.split("|")
+                    caption_en, caption_cz, topics_en, topics_cz, color_en, color_cz, *_ = image_caption.split("|")
                 except ValueError:
                     self.logger.error(f"Failed to parse image caption for region {region.id}: {image_caption}")
                     caption_en = ""
