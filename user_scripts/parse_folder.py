@@ -145,7 +145,8 @@ class Computator:
                 if page_layout.embedding_data is None:
                     page_layout.embedding_data = ElementEmbeddings()
 
-                embeddings_file = os.path.join(self.output_embeddings_path, file_id + '.json')
+                extension = 'jsonl' if self.jsonlines else 'json'
+                embeddings_file = os.path.join(self.output_embeddings_path, file_id + extension)
                 with open(embeddings_file, 'w') as file:
                     if self.jsonlines:
                         file.write(page_layout.embedding_data.model_dump_jsonlines() + "\n")
