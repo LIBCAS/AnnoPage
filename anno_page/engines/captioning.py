@@ -1,9 +1,20 @@
+import os
+import cv2
+import torch
+import base64
 import logging
+import requests
 import numpy as np
+
+from multiprocessing import Pool
+
+from pero_ocr.utils import compose_path, config_get_list
+from pero_ocr.layout_engines.cnn_layout_engine import LayoutEngineYolo
 
 from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata
 from anno_page.enums.language import Language
 from anno_page.enums.line_relation import LineRelation
+from anno_page.engines.helpers import find_nearest_region, find_lines_in_bbox
 
 
 class DummyImageCaptioning:
@@ -56,23 +67,357 @@ class DummyImageCaptioning:
                         for caption_line in caption_lines:
                             caption_line.metadata = [caption_lines_metadata]
 
-                    region.metadata = GraphicalObjectMetadata(tag_id=region.id,
-                                                              mods_id=f"MODS_{region.id}",
-                                                              caption={
-                                                                  Language.ENGLISH: "This is a caption",
-                                                                  Language.CZECH: "Toto je popis"
-                                                              },
-                                                              topics={
-                                                                  Language.ENGLISH: "Here, are, the, topics",
-                                                                  Language.CZECH: "Tady, jsou, témata"
-                                                              },
-                                                              color={
-                                                                  Language.ENGLISH: "color",
-                                                                  Language.CZECH: "barva"
-                                                              },
-                                                              description="Object description",
-                                                              title="Object title",
-                                                              reference_lines_metadata=reference_lines_metadata,
-                                                              caption_lines_metadata=caption_lines_metadata)
+                    metadata = GraphicalObjectMetadata(tag_id=region.id,
+                                                       mods_id=f"MODS_{region.id}",
+                                                       caption={
+                                                           Language.ENGLISH: "This is a caption",
+                                                           Language.CZECH: "Toto je popis"
+                                                       },
+                                                       topics={
+                                                           Language.ENGLISH: "Here, are, the, topics",
+                                                           Language.CZECH: "Tady, jsou, témata"
+                                                       },
+                                                       color={
+                                                           Language.ENGLISH: "color",
+                                                           Language.CZECH: "barva"
+                                                       },
+                                                       description="Object description",
+                                                       title="Object title",
+                                                       reference_lines_metadata=reference_lines_metadata,
+                                                       caption_lines_metadata=caption_lines_metadata)
+
+                    if region.metadata is None:
+                        region.metadata = metadata
+                    else:
+                        region.metadata.update(metadata)
 
         return page_layout
+
+
+class CaptionYoloNearestEngine:
+    def __init__(self, config, device, config_path):
+        self.device = device
+        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(config['yolo_path'], config_path),
+                                            device=device,
+                                            image_size=config.get("yolo_image_size", fallback=None),
+                                            detection_threshold=config.getfloat("yolo_detection_threshold", fallback=0.2))
+
+        self.logger = logging.getLogger(__name__)
+
+    def process_page(self, page_image, page_layout):
+        yolo_result = self.yolo_engine.detect(page_image)
+        captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
+
+        if len(captions) == 0:
+            self.logger.info("No captions detected by YOLO engine.")
+            return page_layout
+
+        for caption in captions:
+            caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
+            caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
+
+            linked_region = find_nearest_region(caption, page_layout, categories=["Image", "Photograph"])
+
+            caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.id}",
+                                                          mods_id=f"MODS_{linked_region.id}_CAPTION_0001",
+                                                          lines=caption_lines,
+                                                          relation=LineRelation.CAPTION,
+                                                          description=caption_lines_text,
+                                                          title=caption_lines_text)
+
+            metadata = GraphicalObjectMetadata(tag_id=linked_region.id,
+                                               mods_id=f"MODS_{linked_region.id}",
+                                               caption_lines_metadata=caption_lines_metadata)
+
+            if linked_region.metadata is None:
+                linked_region.metadata = metadata
+            else:
+                linked_region.metadata.update(metadata)
+
+        return page_layout
+
+
+class CaptionYoloKeypointsEngine:
+    def __init__(self, config, device, config_path):
+        self.device = device
+        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(config['yolo_path'], config_path),
+                                            device=device,
+                                            image_size=config.get("yolo_image_size", fallback=None),
+                                            detection_threshold=config.getfloat("yolo_detection_threshold", fallback=0.2))
+
+        self.yolo_keypoint_threshold = config.getfloat("yolo_keypoint_threshold", fallback=0.5)
+
+        self.logger = logging.getLogger(__name__)
+
+    def process_page(self, page_image, page_layout):
+        yolo_result = self.yolo_engine.detect(page_image)
+
+        captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
+        captions_keypoints = yolo_result.keypoints.xy.cpu().numpy().astype(np.int32).tolist()
+
+        captions_keypoints_confs = yolo_result.keypoints.conf
+        if captions_keypoints_confs is not None:
+            captions_keypoints_confs = captions_keypoints_confs.cpu().numpy().astype(np.float32).tolist()
+        else:
+            captions_keypoints_confs = []
+
+        if len(captions) == 0:
+            self.logger.info("No captions detected by YOLO engine.")
+            return page_layout
+
+        for caption, caption_keypoints, caption_keypoints_confs in zip(captions, captions_keypoints, captions_keypoints_confs):
+            caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
+            caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
+
+            for caption_keypoint, caption_keypoint_conf in zip(caption_keypoints, caption_keypoints_confs):
+                if caption_keypoint_conf >= self.yolo_keypoint_threshold:
+                    x, y = caption_keypoint
+                    region = find_nearest_region((x, y, x, y), page_layout, categories=["Image", "Photograph"])
+                    if region is not None:
+                        caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{region.id}",
+                                                                      mods_id=f"MODS_{region.id}_CAPTION_0001",
+                                                                      lines=caption_lines,
+                                                                      relation=LineRelation.CAPTION,
+                                                                      description=caption_lines_text,
+                                                                      title=caption_lines_text)
+
+                        metadata = GraphicalObjectMetadata(tag_id=region.id,
+                                                           mods_id=f"MODS_{region.id}",
+                                                           caption_lines_metadata=caption_lines_metadata)
+
+                        if region.metadata is None:
+                            region.metadata = metadata
+                        else:
+                            region.metadata.update(metadata)
+
+        return page_layout
+
+
+class CaptionYoloOrganizerEngine:
+    def __init__(self, config, device, config_path):
+        self.device = device
+        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(config['yolo_path'], config_path),
+                                            device=device,
+                                            image_size=config.get("yolo_image_size", fallback=None),
+                                            detection_threshold=config.getfloat("yolo_detection_threshold", fallback=0.2))
+
+        self.caption_organizer = CaptionOrganizer(model_path=compose_path(config['organizer_path'], config_path),
+                                                  device=self.device,
+                                                  categories=config_get_list(config, key="organizer_categories", fallback=[]))
+
+        self.logger = logging.getLogger(__name__)
+
+    def process_page(self, page_image, page_layout):
+        yolo_result = self.yolo_engine.detect(page_image)
+        captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
+
+        if len(captions) == 0:
+            self.logger.info("No captions detected by YOLO engine.")
+            return page_layout
+
+        regions = [region for region in page_layout.regions if region.category not in ("text", None)]
+        assignment = self.caption_organizer.assign_captions_to_regions(regions, captions, page_image)
+
+        for region, caption in assignment:
+            caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
+            caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
+            caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{region.id}",
+                                                          mods_id=f"MODS_{region.id}_CAPTION_0001",
+                                                          lines=caption_lines,
+                                                          relation=LineRelation.CAPTION,
+                                                          description=caption_lines_text,
+                                                          title=caption_lines_text)
+
+            metadata = GraphicalObjectMetadata(tag_id=region.id,
+                                               mods_id=f"MODS_{region.id}",
+                                               caption_lines_metadata=caption_lines_metadata)
+
+            if region.metadata is None:
+                region.metadata = metadata
+            else:
+                region.metadata.update(metadata)
+
+        return page_layout
+
+
+class CaptionOrganizer:
+    def __init__(self, model_path, device, categories):
+        self.model_path = model_path
+        self.device = device
+        self.categories = categories
+
+        self.model = torch.jit.load(self.model_path).to(self.device)
+
+    def assign_captions_to_regions(self, regions, captions, page_image):
+        bboxes, query_types = self.prepare_input_data(regions, captions, page_image)
+        bboxes = bboxes.to(self.device)
+        query_types = query_types.to(self.device)
+
+        with torch.no_grad():
+            relation_matrix = self.model(bboxes, query_types).cpu().numpy()[0]
+
+        assignment = []
+        for region_index, region in enumerate(regions):
+            target_index = np.argmax(relation_matrix[:, region_index])
+            if target_index >= len(regions):
+                caption_index = target_index - len(regions)
+                caption = captions[caption_index]
+                assignment.append((region, caption))
+
+        return assignment
+
+    def prepare_input_data(self, regions, captions, page_image, target_length=64):
+        h, w = page_image.shape[:2]
+
+        bboxes = torch.zeros((1, target_length, 4), dtype=torch.float32)
+        query_types = torch.full((1, target_length), self.categories.index("Padding"), dtype=torch.int64)
+
+        for region_index, region in enumerate(regions):
+            if region.category in self.categories:
+                x1, y1, x2, y2 = region.get_polygon_bounding_box()
+                bboxes[0, region_index] = torch.tensor([x1/w, y1/h, x2/w, y2/h], dtype=torch.float32)
+                query_types[0, region_index] = self.categories.index(region.category)
+
+        for caption_index, caption in enumerate(captions):
+            matrix_caption_index = caption_index + len(regions)
+            x1, y1, x2, y2 = caption
+            bboxes[0, matrix_caption_index] = torch.tensor([x1/w, y1/h, x2/w, y2/h], dtype=torch.float32)
+            query_types[0, matrix_caption_index] = self.categories.index("Image caption")
+
+        return bboxes, query_types
+
+
+class ChatGPTImageCaptioning:
+    def __init__(self, config, device, config_path):
+        self.api_key = config["api_key"]
+        self.max_image_size = config.getint('max_image_size', fallback=None)
+        self.categories = config.get("categories", fallback=None)
+        self.num_processes = config.getint('num_processes', fallback=1)
+
+        api_key_path = os.path.join(config_path, self.api_key)
+        if os.path.exists(api_key_path):
+            with open(api_key_path, 'r') as f:
+                self.api_key = f.read().strip()
+
+        self.logger = logging.getLogger(__name__)
+
+    def process_page(self, page_image, page_layout):
+        if self.categories is not None:
+            regions = []
+            images = []
+
+            for region in page_layout.regions:
+                if region.category in self.categories:
+                    x1, y1, x2, y2 = region.get_polygon_bounding_box()
+
+                    original_width = x2 - x1
+                    original_height = y2 - y1
+
+                    image = page_image[y1:y2, x1:x2]
+
+                    if self.max_image_size is not None and image.size > 0:
+                        if original_width > self.max_image_size or original_height > self.max_image_size:
+                            if original_width > original_height:
+                                image = cv2.resize(image, (self.max_image_size, round(self.max_image_size * original_height / original_width)))
+                            else:
+                                image = cv2.resize(image, (round(self.max_image_size * original_width / original_height), self.max_image_size))
+
+                    if image.size == 0:
+                        self.logger.warning(f"Empty region detected {region.id} ({region.category}): {x1},{y1} {x2},{y2}")
+
+                    else:
+                        images.append(image)
+                        regions.append(region)
+
+            with Pool(self.num_processes) as p:
+                image_captions = p.map(self.generate_image_caption, images)
+
+            for region, image_caption in zip(regions, image_captions):
+                try:
+                    caption_en, caption_cz, topics_en, topics_cz, color_en, color_cz = image_caption.split("|")
+                except ValueError:
+                    self.logger.error(f"Failed to parse image caption for region {region.id}: {image_caption}")
+                    caption_en = ""
+                    caption_cz = ""
+                    topics_en = ""
+                    topics_cz = ""
+                    color_en = ""
+                    color_cz = ""
+
+                # TODO: jak se ma system chovat, kdyz metadata pro region uz existuji? maji se jen doplnit, nebo prepsat?
+                metadata = GraphicalObjectMetadata(tag_id=region.id,
+                                                   mods_id=f"MODS_{region.id}",
+                                                   caption={
+                                                       Language.ENGLISH: caption_en.strip(),
+                                                       Language.CZECH: caption_cz.strip()
+                                                   },
+                                                   topics={
+                                                       Language.ENGLISH: topics_en.strip(),
+                                                       Language.CZECH: topics_cz.strip()
+                                                   },
+                                                   color={
+                                                         Language.ENGLISH: color_en.strip(),
+                                                         Language.CZECH: color_cz.strip()
+                                                   },
+                                                   caption_lines_metadata=None,
+                                                   reference_lines_metadata=None)
+
+                if region.metadata is None:
+                    region.metadata = metadata
+                else:
+                    region.metadata.update(metadata)
+
+        return page_layout
+
+    def generate_image_caption(self, image):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "For the given image, provide details about its content in the following format "
+                                    "(omit the 'less than' and 'greater than' symbols): <english-caption>|"
+                                    "<czech-caption>|<english-topics>|<czech-topics>|<english-color>|<czech-color>. "
+                                    "The <english-caption> and <czech-caption> should be a full sentences describing "
+                                    "the image in english and czech, respectively. The <english-topics> "
+                                    "and <czech-topics> should be comma-separated lists of topics in english and czech, "
+                                    "respectively. Select the <english-color> and <czech-color> from the following list "
+                                    "according to the appearance of the image in english and czech: "
+                                    "[black-and-white, grayscale, duotone, color] and [černobílý, šedotónový, "
+                                    "dvojbarevný, barevný]."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{self.encode_image(image)}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "max_tokens": 300
+        }
+
+        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+
+        try:
+            image_caption = response.json()["choices"][0]["message"]["content"]
+        except:
+            image_caption = ""
+
+        return image_caption
+
+    @staticmethod
+    def encode_image(image):
+        image_jpg = cv2.imencode('.jpg', image)[1]
+        image_base64 = base64.b64encode(image_jpg).decode('utf-8')
+        return image_base64
+
