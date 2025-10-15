@@ -25,7 +25,7 @@ def parse_arguments():
     parser.add_argument("--output-alto-path", help="Path to directory where ALTO files will be saved.")
     parser.add_argument("--output-render-path", help="Path to directory where rendered images will be saved.")
     parser.add_argument("--output-embeddings-path", help="Path to directory where embeddings will be saved.")
-    parser.add_argument("--jsonlines", action='store_true', help="If set, the output is saved in JSON Lines format instead of a single JSON array.")
+    parser.add_argument("--embeddings-jsonlines", action='store_true', help="If set, the embedding output is saved in JSON Lines format instead of a single JSON array.")
     parser.add_argument('-s', '--skip-processed', action='store_true', required=False, help='If set, already processed files are skipped.')
 
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
@@ -114,14 +114,14 @@ def load_already_processed_files(directories):
 
 
 class Computator:
-    def __init__(self, page_parser, input_image_path, output_xml_path, output_alto_path, output_embeddings_path, output_render_path, jsonlines=False):
+    def __init__(self, page_parser, input_image_path, output_xml_path, output_alto_path, output_embeddings_path, output_render_path, embeddings_jsonlines=False):
         self.page_parser = page_parser
         self.input_image_path = input_image_path
         self.output_xml_path = output_xml_path
         self.output_alto_path = output_alto_path
         self.output_embeddings_path = output_embeddings_path
         self.output_render_path = output_render_path
-        self.jsonlines = jsonlines
+        self.embeddings_jsonlines = embeddings_jsonlines
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -150,10 +150,10 @@ class Computator:
                 if page_layout.embedding_data is None:
                     page_layout.embedding_data = ElementEmbeddings()
 
-                extension = 'jsonl' if self.jsonlines else 'json'
+                extension = 'jsonl' if self.embeddings_jsonlines else 'json'
                 embeddings_file = os.path.join(self.output_embeddings_path, f"{file_id}.{extension}")
                 with open(embeddings_file, 'w') as file:
-                    if self.jsonlines:
+                    if self.embeddings_jsonlines:
                         file.write(page_layout.embedding_data.model_dump_jsonlines() + "\n")
                     else:
                         file.write(page_layout.embedding_data.model_dump_json(indent=2) + "\n")
@@ -219,7 +219,7 @@ def main():
     output_embeddings_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_EMBEDDINGS_PATH')
     output_render_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_RENDER_PATH')
 
-    jsonlines = args.jsonlines
+    embeddings_jsonlines = args.embeddings_jsonlines
 
     if output_xml_path is not None:
         create_dir_if_not_exists(output_xml_path)
@@ -258,7 +258,7 @@ def main():
                             output_alto_path=output_alto_path,
                             output_embeddings_path=output_embeddings_path,
                             output_render_path=output_render_path,
-                            jsonlines=jsonlines)
+                            embeddings_jsonlines=embeddings_jsonlines)
 
     results = []
     if args.process_count > 1:
