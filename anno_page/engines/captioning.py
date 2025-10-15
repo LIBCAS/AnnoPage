@@ -344,6 +344,8 @@ class ChatGPTImageCaptioning:
             images = next_attempt_images
             regions = next_attempt_regions
 
+            self.logger.info(f"Captioning attempt {current_attempt} completed, {len(images)} element{'s' if len(images) > 1 else ''} remaining.")
+
         return page_layout
 
     def crop_region_image(self, page_image, region):
