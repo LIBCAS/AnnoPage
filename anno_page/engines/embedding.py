@@ -34,7 +34,7 @@ class ClipEmbeddingEngine:
 
                 object_uuid = region.metadata.mods_uuid if region.metadata is not None else uuid.uuid4()
 
-                region_embedding = self.model.encode(Image.fromarray(region_image)).tolist()
+                region_embedding = self.model.encode(Image.fromarray(region_image), show_progress_bar=False).tolist()
 
                 if self.precision is not None:
                     region_embedding = [round(value, self.precision) for value in region_embedding]
