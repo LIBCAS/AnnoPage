@@ -14,7 +14,7 @@ class ClipEmbeddingEngine:
         self.device = device
         self.model_name = config["MODEL"]
         self.precision = int(config["PRECISION"]) if "PRECISION" in config and config["PRECISION"] is not None else None
-        self.categories = config_get_list(config, key="categories", fallback=None)
+        self.categories = config_get_list(config, key="categories", fallback=None) if "categories" in config else None
 
         self.model = SentenceTransformer(self.model_name, device=device)
 

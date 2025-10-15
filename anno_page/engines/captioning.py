@@ -294,7 +294,7 @@ class ChatGPTImageCaptioning:
 
         self.api_key = config["api_key"]
         self.max_image_size = config.getint('max_image_size', fallback=None)
-        self.categories = config_get_list(config, key="categories", fallback=None)
+        self.categories = config_get_list(config, key="categories", fallback=None) if "categories" in config else None
         self.num_processes = config.getint('num_processes', fallback=1)
         self.prompt_settings = compose_path(config["prompt_settings"], self.config_path)
 
