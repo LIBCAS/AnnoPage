@@ -297,6 +297,7 @@ class ChatGPTImageCaptioning:
         self.categories = config_get_list(config, key="categories", fallback=None) if "categories" in config else None
         self.num_processes = config.getint('num_processes', fallback=1)
         self.prompt_settings = compose_path(config["prompt_settings"], self.config_path)
+        self.max_attempts = config.getint('max_attempts', fallback=3)
 
         api_key_path = os.path.join(self.config_path, self.api_key)
         if os.path.exists(api_key_path):
@@ -312,75 +313,66 @@ class ChatGPTImageCaptioning:
         self.logger = logging.getLogger(__name__)
 
     def process_page(self, page_image, page_layout):
-        if self.categories is not None:
-            regions = []
-            images = []
+        regions = []
+        images = []
 
-            for region in page_layout.regions:
-                if region.category in self.categories:
-                    x1, y1, x2, y2 = region.get_polygon_bounding_box()
+        for region in page_layout.regions:
+            if self.categories is None and region.category not in (None, 'text') or region.category in self.categories:
+                image = self.crop_region_image(page_image, region)
 
-                    original_width = x2 - x1
-                    original_height = y2 - y1
+                if image.size == 0:
+                    self.logger.warning(f"Empty region detected {region.id} ({region.category}): {x1},{y1} {x2},{y2}")
 
-                    image = page_image[y1:y2, x1:x2]
-
-                    if self.max_image_size is not None and image.size > 0:
-                        if original_width > self.max_image_size or original_height > self.max_image_size:
-                            if original_width > original_height:
-                                image = cv2.resize(image, (self.max_image_size, round(self.max_image_size * original_height / original_width)))
-                            else:
-                                image = cv2.resize(image, (round(self.max_image_size * original_width / original_height), self.max_image_size))
-
-                    if image.size == 0:
-                        self.logger.warning(f"Empty region detected {region.id} ({region.category}): {x1},{y1} {x2},{y2}")
-
-                    else:
-                        images.append(image)
-                        regions.append(region)
-
-            if self.num_processes > 1:
-                with Pool(self.num_processes) as p:
-                    image_captions = p.map(self.generate_image_caption, images)
-            else:
-                image_captions = [self.generate_image_caption(image) for image in images]
-
-            for region, image_caption in zip(regions, image_captions):
-                try:
-                    caption_en, caption_cz, topics_en, topics_cz, color_en, color_cz, *_ = image_caption.split("|")
-                except ValueError:
-                    self.logger.error(f"Failed to parse image caption for region {region.id}: {image_caption}")
-                    caption_en = ""
-                    caption_cz = ""
-                    topics_en = ""
-                    topics_cz = ""
-                    color_en = ""
-                    color_cz = ""
-
-                # TODO: jak se ma system chovat, kdyz metadata pro region uz existuji? maji se jen doplnit, nebo prepsat?
-                metadata = GraphicalObjectMetadata(tag_id=region.id,
-                                                   mods_id=f"MODS_{region.id}",
-                                                   caption={
-                                                       Language.ENGLISH: caption_en.strip(),
-                                                       Language.CZECH: caption_cz.strip()
-                                                   },
-                                                   topics={
-                                                       Language.ENGLISH: topics_en.strip(),
-                                                       Language.CZECH: topics_cz.strip()
-                                                   },
-                                                   color={
-                                                         Language.ENGLISH: color_en.strip(),
-                                                         Language.CZECH: color_cz.strip()
-                                                   },
-                                                   caption_lines_metadata=None,
-                                                   reference_lines_metadata=None)
-
-                if region.metadata is None:
-                    region.metadata = metadata
                 else:
-                    region.metadata.update(metadata)
+                    images.append(image)
+                    regions.append(region)
+
+        current_attempt = 0
+        while len(images) > 0 and current_attempt < self.max_attempts:
+            image_captions = self.process_images_and_regions(images, regions)
+
+            current_attempt += 1
+            next_attempt_images = []
+            next_attempt_regions = []
+
+            for image, region, image_caption in zip(images, regions, image_captions):
+                result = self.process_image_caption(region, image_caption)
+                if not result:
+                    next_attempt_images.append(image)
+                    next_attempt_regions.append(region)
+
+            images = next_attempt_images
+            regions = next_attempt_regions
 
         return page_layout
+
+    def crop_region_image(self, page_image, region):
+        x1, y1, x2, y2 = region.get_polygon_bounding_box()
+
+        original_width = x2 - x1
+        original_height = y2 - y1
+
+        image = page_image[y1:y2, x1:x2]
+
+        if self.max_image_size is not None and image.size > 0:
+            if original_width > self.max_image_size or original_height > self.max_image_size:
+                if original_width > original_height:
+                    image = cv2.resize(image, (self.max_image_size,
+                                               round(self.max_image_size * original_height / original_width)))
+                else:
+                    image = cv2.resize(image, (round(self.max_image_size * original_width / original_height),
+                                               self.max_image_size))
+
+        return image
+
+    def process_images_and_regions(self, images, regions):
+        if self.num_processes > 1:
+            with Pool(self.num_processes) as p:
+                image_captions = p.map(self.generate_image_caption, images)
+        else:
+            image_captions = [self.generate_image_caption(image) for image in images]
+
+        return image_captions
 
     def generate_image_caption(self, image):
         headers = {
@@ -418,6 +410,51 @@ class ChatGPTImageCaptioning:
             image_caption = ""
 
         return image_caption
+
+    def process_image_caption(self, region, image_caption):
+        try:
+            image_caption_json = json.loads(image_caption)
+        except json.JSONDecodeError:
+            self.logger.error(f"Failed to parse image caption JSON for region {region.id}: {image_caption}")
+            return False
+
+        if len(image_caption_json) == 0:
+            self.logger.warning(f"Empty image caption JSON for region {region.id}: {image_caption}")
+            return False
+
+        caption_en = image_caption_json.get("caption_en", None)
+        caption_cz = image_caption_json.get("caption_cz", None)
+        topics_en = image_caption_json.get("topics_en", None)
+        topics_cz = image_caption_json.get("topics_cz", None)
+        color_en = image_caption_json.get("color_en", None)
+        color_cz = image_caption_json.get("color_cz", None)
+
+        # TODO: jak se ma system chovat, kdyz metadata pro region uz existuji? maji se jen doplnit, nebo prepsat?
+        metadata = GraphicalObjectMetadata(tag_id=region.id,
+                                           mods_id=f"MODS_{region.id}",
+                                           caption={
+                                               Language.ENGLISH: caption_en,
+                                               Language.CZECH: caption_cz
+                                           },
+                                           topics={
+                                               Language.ENGLISH: topics_en,
+                                               Language.CZECH: topics_cz
+                                           },
+                                           color={
+                                               Language.ENGLISH: color_en,
+                                               Language.CZECH: color_cz
+                                           },
+                                           caption_lines_metadata=None,
+                                           reference_lines_metadata=None)
+
+        if region.metadata is None:
+            region.metadata = metadata
+        else:
+            region.metadata.update(metadata)
+
+        self.logger.info(f"Successfully processed caption for region {region.id}")
+
+        return True
 
     @staticmethod
     def encode_image(image):
