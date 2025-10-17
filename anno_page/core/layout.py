@@ -9,8 +9,6 @@ from anno_page.enums.category import Category
 
 
 def region_to_altoxml(region: RegionLayout, page_content_element):
-    # import IPython; IPython.embed(); exit(1)
-
     category = Category.from_string(region.category)
 
     # TODO: find a better way to get the composed block ID or at least check for duplicates
@@ -51,8 +49,6 @@ def set_position_and_size(block, bounding_box):
 
 
 def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_version=ALTOVersion.ALTO_v4_4):
-    # import IPython; IPython.embed(); exit(1)
-
     namespaces = alto_root.nsmap
     mods_namespace = namespaces.get("mods", None)
     if mods_namespace is None:
