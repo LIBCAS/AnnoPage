@@ -8,11 +8,12 @@ import argparse
 import traceback
 import configparser
 
+from lxml import etree as ET
 from safe_gpu import safe_gpu
 from multiprocessing import Pool
 from pero_ocr.core.layout import PageLayout, ALTOVersion
 
-from anno_page.core.layout import render_to_image
+from anno_page.core.layout import render_to_image, add_page_layout_to_alto
 from anno_page.core.embedding import ElementEmbeddings
 from anno_page.core.page_parser import PageParser
 
@@ -21,6 +22,11 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", help="Path to config file.")
     parser.add_argument("--input-image-path", help="Path to directory with images to process.")
+
+    group1 = parser.add_mutually_exclusive_group()
+    group1.add_argument("--input-xml-path", help="Path to directory with PAGE XML files", required=False, default=None)
+    group1.add_argument("--input-alto-path", help="Path to directory with ALTO XML files", required=False, default=None)
+
     parser.add_argument("--output-xml-path", help="Path to directory where PAGE XML files will be saved.")
     parser.add_argument("--output-alto-path", help="Path to directory where ALTO files will be saved.")
     parser.add_argument("--output-render-path", help="Path to directory where rendered images will be saved.")
@@ -114,9 +120,20 @@ def load_already_processed_files(directories):
 
 
 class Computator:
-    def __init__(self, page_parser, input_image_path, output_xml_path, output_alto_path, output_embeddings_path, output_render_path, embeddings_jsonlines=False):
+    def __init__(self,
+                 page_parser,
+                 input_image_path,
+                 input_xml_path,
+                 input_alto_path,
+                 output_xml_path,
+                 output_alto_path,
+                 output_embeddings_path,
+                 output_render_path,
+                 embeddings_jsonlines=False):
         self.page_parser = page_parser
         self.input_image_path = input_image_path
+        self.input_xml_path = input_xml_path
+        self.input_alto_path = input_alto_path
         self.output_xml_path = output_xml_path
         self.output_alto_path = output_alto_path
         self.output_embeddings_path = output_embeddings_path
@@ -137,14 +154,43 @@ class Computator:
             else:
                 image = None
 
+            alto_file_path = None
             page_layout = PageLayout(id=file_id, page_size=(image.shape[0], image.shape[1]))
+            self.logger.info(f"Created empty page layout for id: '{file_id}'.")
+
+            if self.input_alto_path is not None:
+                alto_file_path = os.path.join(self.input_alto_path, file_id + '.xml')
+                if os.path.isfile(alto_file_path):
+                    page_layout.from_altoxml(alto_file_path)
+                    self.logger.info(f"Loaded ALTO file: '{alto_file_path}'.")
+                else:
+                    self.logger.warning(f"ALTO file does not exist: '{alto_file_path}'.")
+            elif self.input_xml_path is not None:
+                xml_file_path = os.path.join(self.input_xml_path, file_id + '.xml')
+                if os.path.isfile(xml_file_path):
+                    page_layout = PageLayout(file=xml_file_path)
+                    self.logger.info(f"Loaded PAGE XML file: '{xml_file_path}'.")
+                else:
+                    self.logger.warning(f"PAGE XML file does not exist: '{xml_file_path}'.")
+
             page_layout = self.page_parser.process_page(image, page_layout)
 
             if self.output_xml_path is not None:
                 page_layout.to_pagexml(os.path.join(self.output_xml_path, file_id + '.xml'))
 
             if self.output_alto_path is not None:
-                page_layout.to_altoxml(os.path.join(self.output_alto_path, file_id + '.xml'), version=ALTOVersion.ALTO_v4_4)
+                output_alto_path = os.path.join(self.output_alto_path, file_id + '.xml')
+
+                if alto_file_path is not None:
+                    parser = ET.XMLParser(remove_blank_text=True)
+                    alto = ET.parse(alto_file_path, parser)
+                    add_page_layout_to_alto(page_layout, alto.getroot())
+
+                    with open(output_alto_path, 'w') as file:
+                        file.write(ET.tostring(alto, pretty_print=True, encoding="utf-8", xml_declaration=True).decode("utf-8"))
+
+                else:
+                    page_layout.to_altoxml(output_alto_path, version=ALTOVersion.ALTO_v4_4)
 
             if self.output_embeddings_path is not None:
                 if page_layout.embedding_data is None:
@@ -197,6 +243,12 @@ def main():
     if args.input_image_path is not None:
         config['PARSE_FOLDER']['INPUT_IMAGE_PATH'] = args.input_image_path
 
+    if args.input_xml_path is not None:
+        config['PARSE_FOLDER']['INPUT_XML_PATH'] = args.input_xml_path
+
+    if args.input_alto_path is not None:
+        config['PARSE_FOLDER']['INPUT_ALTO_PATH'] = args.input_alto_path
+
     if args.output_xml_path is not None:
         config['PARSE_FOLDER']['OUTPUT_XML_PATH'] = args.output_xml_path
 
@@ -214,6 +266,8 @@ def main():
     page_parser = PageParser(config, config_path=os.path.dirname(config_path), device=device)
 
     input_image_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_IMAGE_PATH')
+    input_xml_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_XML_PATH')
+    input_alto_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_ALTO_PATH')
     output_xml_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_XML_PATH')
     output_alto_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_ALTO_PATH')
     output_embeddings_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_EMBEDDINGS_PATH')
@@ -254,6 +308,8 @@ def main():
 
     computator = Computator(page_parser=page_parser,
                             input_image_path=input_image_path,
+                            input_xml_path=input_xml_path,
+                            input_alto_path=input_alto_path,
                             output_xml_path=output_xml_path,
                             output_alto_path=output_alto_path,
                             output_embeddings_path=output_embeddings_path,
