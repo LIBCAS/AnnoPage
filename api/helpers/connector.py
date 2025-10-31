@@ -11,6 +11,8 @@ class Connector:
         self.worker_key = worker_key
         self.user_agent = user_agent
 
+        # TODO: Use sessions for connection
+
         self._logger = logging.getLogger(__name__)
 
     def get(self, url, params=None):
@@ -21,8 +23,12 @@ class Connector:
         response = requests.post(url, data=data, json=json, files=files, params=params, headers=self._get_headers())
         return response
 
-    def put(self, url, data=None):
-        response = requests.put(url, json=data, headers=self._get_headers())
+    def put(self, url, json=None, files=None):
+        response = requests.put(url, json=json, files=files, headers=self._get_headers())
+        return response
+
+    def patch(self, url, json=None):
+        response = requests.patch(url, json=json, headers=self._get_headers())
         return response
 
     def _get_headers(self):
