@@ -1,21 +1,20 @@
-import os
 import cv2
+import argparse
+import configparser
+import json
+import logging.config
+import os
+import subprocess
 import sys
 import time
-import json
-import argparse
-import subprocess
-import configparser
-import logging.config
-
 from collections import defaultdict
 
-from api.config import config
-from api.schemas.base_objects import Job, ProcessingState
-from api.worker.adapter import Adapter
-from api.worker.connector import Connector
-from api.worker.processing_setup import ProcessingSetup
-from api.worker.utils import create_zip_archive
+from doc_api.api.schemas.base_objects import Job, JobLease, ProcessingState
+
+from api.helpers.adapter import Adapter
+from api.helpers.connector import Connector
+from api.helpers.processing_setup import ProcessingSetup
+from api.helpers.utils import create_zip_archive
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +23,8 @@ def parse_arguments():
     logger.info(' '.join(sys.argv))
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--api-url", type=str, help="URL of the API endpoint.")
+    parser.add_argument("--api-key", type=str, help="API key for authentication.")
     parser.add_argument("--wait", help="If set, the worker will wait the specified number of seconds before getting new job if there was no job previously.", required=False, default=None, type=int)
     parser.add_argument("--default-configs", help="Path to directory with default configs.", required=True, type=str)
 
@@ -36,6 +37,7 @@ def process_job(adapter: Adapter, job: Job, default_configs: str):
     download_data(adapter, setup)
     download_json(adapter, setup)
 
+    update_processing_setup(setup)
     prepare_processing_config(setup, default_configs)
 
     run_processing(setup)
@@ -43,17 +45,19 @@ def process_job(adapter: Adapter, job: Job, default_configs: str):
     prepare_processing_result(setup)
 
     upload_results(adapter, setup)
-    set_job_finished(adapter, setup)
+    set_job_finished(adapter)
 
 
 def download_data(adapter: Adapter, setup: ProcessingSetup):
-    images = adapter.get_images()
+    images = setup.job.images
 
     # TODO: log if images is None
 
     for image_info in images:
         download_image(adapter, setup, image_info)
-        download_alto(adapter, setup, image_info)
+
+        if setup.job.alto_required:
+            download_alto(adapter, setup, image_info)
 
 
 def download_image(adapter: Adapter, setup: ProcessingSetup, image_info):
@@ -88,6 +92,22 @@ def download_json(adapter: Adapter, setup: ProcessingSetup):
     else:
         # TODO: log error
         pass
+
+
+def update_processing_setup(setup: ProcessingSetup):
+    with open(setup.meta_json, "r") as file:
+        meta_json = json.load(file)
+
+    if "output" in meta_json:
+        output_config = meta_json["output"]
+        if "alto" in output_config and output_config["alto"]:
+            setup.output_alto = True
+
+        if "embeddings" in output_config and output_config["embeddings"]:
+            setup.output_embeddings = True
+
+        if "embeddings_jsonlines" in output_config and output_config["embeddings_jsonlines"]:
+            setup.embeddings_jsonlines = True
 
 
 def prepare_processing_config(setup: ProcessingSetup, default_configs: str):
@@ -199,18 +219,27 @@ def save_config(setup: ProcessingSetup, config: configparser.ConfigParser):
 
 
 def run_processing(setup: ProcessingSetup):
-    parse_folder_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../user_scripts/parse_folder.py")
+    # TODO: find better way to run the processing script
+    parse_folder_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../user_scripts/parse_folder.py")
 
     process_env = os.environ.copy()
     process_params = [
         "python", parse_folder_path,
         "--config", setup.config,
         "--input-image-path", setup.images_directory,
-        # "--input-alto-path", setup.alto_directory,
-        "--output-alto-path", setup.output_directory,
-        "--output-embeddings-path", setup.output_directory,
-        "--jsonlines"
     ]
+
+    if setup.job.alto_required:
+        process_params += ["--input-alto-path", setup.alto_directory]
+
+    if setup.output_alto:
+        process_params += ["--output-alto-path", setup.output_directory]
+
+    if setup.output_embeddings:
+        process_params += ["--output-embeddings-path", setup.output_directory]
+
+    if setup.embeddings_jsonlines:
+        process_params.append("--embeddings-jsonlines")
 
     subprocess.run(process_params, env=process_env)
 
@@ -224,32 +253,29 @@ def upload_results(adapter: Adapter, setup: ProcessingSetup):
     adapter.post_result(setup.result)
 
 
-def set_job_finished(adapter: Adapter, setup: ProcessingSetup):
-    data = {
-        "id": str(setup.job.id),
-        "state": ProcessingState.DONE,
-        "log": "",
-        "log_user": ""
-    }
-
-    adapter.post_finish_job(data)
+def set_job_finished(adapter: Adapter):
+    adapter.patch_job_finish()
 
 
 def main():
     args = parse_arguments()
 
-    connector = Connector(worker_key=config.ADMIN_KEY)
-    adapter = Adapter(connector)
+    connector = Connector(worker_key=args.api_key)
+    adapter = Adapter(args.api_url, connector)
     job = None
 
     while True:
         try:
-            job = adapter.get_job()
-            adapter.job = job
+            job_lease = adapter.post_job_lease()
 
-            if job is not None:
-                logger.info(f"Processing job {job.id}.")
-                process_job(adapter, job, args.default_configs)
+            if job_lease is not None:
+                job = adapter.get_job(job_id=job_lease.id, set_if_successful=True)
+
+                if job is not None:
+                    logger.info(f"Processing job {job.id}.")
+                    process_job(adapter, job, args.default_configs)
+                else:
+                    logger.warning("Job lease received but job not found.")
 
             else:
                 if args.wait is not None:
