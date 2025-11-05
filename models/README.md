@@ -5,3 +5,4 @@ This directory contains trained models for AnnoPage. Please refer to the individ
 ## Available Models
 
 - `non-textual_element_detector`: A model for detecting non-textual elements in documents, such as images, tables, graphs, etc.
+- `captions_analyzer`: A model for detecting and assigning captions to their corresponding non-textual elements in documents.
