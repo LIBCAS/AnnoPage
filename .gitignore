@@ -114,7 +114,7 @@ ENV/
 .mypy_cache/
 
 *.gz
-*.zip
+#*.zip
 *.trn
 *.tst
 *.LACHUBCZ-NTB
