@@ -5,9 +5,8 @@ from datetime import datetime
 
 from pero_ocr.core.layout import TextLine
 
-from anno_page.enums.language import Language
-from anno_page.enums.category import Category
-from anno_page.enums.line_relation import LineRelation
+from anno_page import globals
+from anno_page.enums import Category, Language, LineRelation
 
 
 class BaseMetadata:
@@ -72,7 +71,7 @@ class BaseMetadata:
         record_creation_date.text = datetime.now().isoformat(timespec='seconds')
 
         record_content_source = ET.SubElement(record_info, f"{{{mods_namespace}}}recordContentSource")
-        record_content_source.text = "Orbis Pictus"
+        record_content_source.text = globals.software_fullname
 
         description_standard = ET.SubElement(record_info, f"{{{mods_namespace}}}descriptionStandard")
         description_standard.text = "StandardNDK"
@@ -86,7 +85,7 @@ class BaseMetadata:
             record_info_note.text = f"{confidence:.3f}"
 
         record_identifier = ET.SubElement(record_info, f"{{{mods_namespace}}}recordIdentifier")
-        record_identifier.attrib["source"] = "Orbis Pictus"
+        record_identifier.attrib["source"] = globals.software_name
         record_identifier.text = f"uuid:{uuid.uuid4()}"
 
         language_of_cataloging = ET.SubElement(record_info, f"{{{mods_namespace}}}languageOfCataloging")

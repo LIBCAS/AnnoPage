@@ -5,14 +5,12 @@ from lxml import etree as ET
 from lxml.etree import Element
 from pero_ocr.core.layout import RegionLayout, PageLayout, create_ocr_processing_element, ALTOVersion
 
-from anno_page.enums.category import Category
+from anno_page import globals
+from anno_page.enums import Category
 
 
 def region_to_altoxml(region: RegionLayout, page_content_element):
     category = Category.from_string(region.category)
-
-    # TODO: find a better way to get the composed block ID or at least check for duplicates
-    composed_block_id = len(page_content_element.findall(".//ComposedBlock")) + 1
 
     page_element = page_content_element
     while not (page_element.tag == "Page" or page_element.tag.endswith("}Page")):
@@ -20,21 +18,38 @@ def region_to_altoxml(region: RegionLayout, page_content_element):
 
     page_id = page_element.attrib["ID"]
 
+    composed_block_id = get_next_id(page_content_element, "ComposedBlock", prefix=f"{page_id}_CB", padding=4)
     composed_block_element = ET.SubElement(page_content_element, "ComposedBlock")
-    composed_block_element.set("ID", f"{page_id}_CB{composed_block_id:04d}")
+    composed_block_element.set("ID", composed_block_id)
     composed_block_element.set("TYPE", str(category))
 
+    graphical_element_id = get_next_id(page_content_element, "GraphicalElement", prefix=f"{page_id}_GE", padding=4)
     graphical_element = ET.SubElement(composed_block_element, "GraphicalElement")
-    graphical_element.set("ID", region.id)
+    graphical_element.set("ID", graphical_element_id)
 
     bounding_box = region.get_polygon_bounding_box()
     set_position_and_size(composed_block_element, bounding_box)
     set_position_and_size(graphical_element, bounding_box)
 
-    if region.metadata is not None:
-        composed_block_element.set("TAGREFS", region.metadata.tag_id)
+    if region.graphical_metadata is not None:
+        composed_block_element.set("TAGREFS", region.graphical_metadata.tag_id)
 
     return composed_block_element
+
+
+def get_next_id(parent_element, element_tag, prefix="", padding=4):
+    existing_elements = parent_element.findall(f".//{element_tag}")
+    existing_ids = set([element.attrib["ID"] for element in existing_elements if "ID" in element.attrib])
+    index = 1
+
+    new_id = f"{prefix}{str(index).zfill(padding)}"
+
+    while new_id in existing_ids:
+        index += 1
+        new_id = f"{prefix}{str(index).zfill(padding)}"
+
+    return new_id
+
 
 
 def set_position_and_size(block, bounding_box):
@@ -59,10 +74,10 @@ def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_ve
     if description_element is None:
         description_element = ET.SubElement(alto_root, "Description")
 
-    processing_element = create_ocr_processing_element(id="AnnoPageProcessing",
-                                                       software_creator_str="AnnoPage",
-                                                       software_name_str="AnnoPage",
-                                                       software_version_str="0.1",
+    processing_element = create_ocr_processing_element(id=globals.software_name,
+                                                       software_creator_str=globals.software_creator,
+                                                       software_name_str=globals.software_name,
+                                                       software_version_str=globals.software_version,
                                                        alto_version=alto_version)
 
     description_element.append(processing_element)
@@ -88,8 +103,8 @@ def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_ve
             continue
 
         region_to_altoxml(region, print_space_element)
-        if region.metadata is not None:
-            region.metadata.to_altoxml(tags_element,
+        if region.graphical_metadata is not None:
+            region.graphical_metadata.to_altoxml(tags_element,
                                        category=region.category,
                                        bounding_box=region.get_polygon_bounding_box(),
                                        confidence=region.detection_confidence,
