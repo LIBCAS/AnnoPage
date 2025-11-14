@@ -12,7 +12,8 @@ from multiprocessing import Pool
 from pero_ocr.utils import compose_path, config_get_list
 
 from anno_page.core.metadata import RelatedLinesMetadata
-from anno_page.engines import LayoutProcessingEngine, YoloDetectionEngine
+from anno_page.engines import LayoutProcessingEngine
+from anno_page.engines.detection import YoloDetector
 from anno_page.enums import Language, LineRelation
 from anno_page.engines.helpers import find_nearest_region, find_lines_in_bbox
 
@@ -21,13 +22,13 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
 
-        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(self.config['yolo_path'], self.config_path),
-                                            device=self.device,
-                                            image_size=self.config.get("yolo_image_size", fallback=None),
-                                            detection_threshold=self.config.getfloat("yolo_detection_threshold", fallback=0.2))
+        self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
+                                     device=self.device,
+                                     detection_threshold=self.config.getfloat("YOLO_DETECTION_THRESHOLD", 0.2),
+                                     image_size=self.config.getint("YOLO_IMAGE_SIZE", 640))
 
     def process_page(self, page_image, page_layout):
-        yolo_result = self.yolo_engine.detect(page_image)
+        yolo_result = self.detector(page_image)
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
 
         if len(captions) == 0:
@@ -56,15 +57,15 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
 
-        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(self.config['yolo_path'], self.config_path),
-                                            device=self.device,
-                                            image_size=self.config.get("yolo_image_size", fallback=None),
-                                            detection_threshold=self.config.getfloat("yolo_detection_threshold", fallback=0.2))
+        self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
+                                     device=self.device,
+                                     detection_threshold=self.config.getfloat("YOLO_DETECTION_THRESHOLD", 0.2),
+                                     image_size=self.config.getint("YOLO_IMAGE_SIZE", 640))
 
         self.yolo_keypoint_threshold = self.config.getfloat("yolo_keypoint_threshold", fallback=0.5)
 
     def process_page(self, page_image, page_layout):
-        yolo_result = self.yolo_engine.detect(page_image)
+        yolo_result = self.detector(page_image)
 
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
         captions_keypoints = yolo_result.keypoints.xy.cpu().numpy().astype(np.int32).tolist()
@@ -104,17 +105,17 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
 
-        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(self.config['yolo_path'], self.config_path),
-                                            device=self.device,
-                                            image_size=self.config.get("yolo_image_size", fallback=None),
-                                            detection_threshold=self.config.getfloat("yolo_detection_threshold", fallback=0.2))
+        self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
+                                     device=self.device,
+                                     detection_threshold=self.config.getfloat("YOLO_DETECTION_THRESHOLD", 0.2),
+                                     image_size=self.config.getint("YOLO_IMAGE_SIZE", 640))
 
         self.caption_organizer = CaptionOrganizer(model_path=compose_path(self.config['organizer_path'], self.config_path),
                                                   device=self.device,
                                                   categories=config_get_list(self.config, key="organizer_categories", fallback=[]))
 
     def process_page(self, page_image, page_layout):
-        yolo_result = self.yolo_engine.detect(page_image)
+        yolo_result = self.detector(page_image)
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
 
         if len(captions) == 0:
