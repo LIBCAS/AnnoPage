@@ -2,14 +2,12 @@ import re
 import torch
 import logging
 
-from pero_ocr.document_ocr.page_parser import LayoutExtractorYolo
-
-from anno_page.engines.embedding import ClipEmbeddingEngine
-from anno_page.engines.captioning import (ChatGPTImageCaptioning, CaptionYoloNearestEngine,
-                                          CaptionYoloKeypointsEngine, CaptionYoloOrganizerEngine)
+from anno_page.engines import (LayoutProcessingEngine, YoloDetectionEngine, ClipImageEmbeddingEngine,
+                               ChatGPTImageCaptioningEngine, CaptionYoloNearestEngine, CaptionYoloKeypointsEngine,
+                               CaptionYoloOrganizerEngine)
 
 
-def operation_factory(config, device, config_path):
+def operation_factory(config, device, config_path) -> LayoutProcessingEngine | None:
     engine = None
     logger = logging.getLogger(__name__)
 
@@ -17,15 +15,15 @@ def operation_factory(config, device, config_path):
         logger.warning("Config does not contain 'METHOD' key.")
         return None
 
-    if config['METHOD'] == 'LAYOUT_YOLO':
-        logger.info("Creating LayoutExtractorYolo engine")
-        engine = LayoutExtractorYolo(config, device, config_path=config_path)
-    elif config['METHOD'] == 'CLIP_EMBEDDING':
+    if config['METHOD'] == 'YOLO_DETECTION':
+        logger.info("Creating YoloDetection engine")
+        engine = YoloDetectionEngine(config, device, config_path=config_path)
+    elif config['METHOD'] == 'CLIP_IMAGE_EMBEDDING':
         logger.info("Creating ClipEmbedding engine")
-        engine = ClipEmbeddingEngine(config, device, config_path=config_path)
+        engine = ClipImageEmbeddingEngine(config, device, config_path=config_path)
     elif config['METHOD'] == 'GPT_IMAGE_CAPTIONING':
-        logger.info("Creating GPTImageCaptioning engine")
-        engine = ChatGPTImageCaptioning(config, device, config_path=config_path)
+        logger.info("Creating ChatGPTImageCaptioning engine")
+        engine = ChatGPTImageCaptioningEngine(config, device, config_path=config_path)
     elif config['METHOD'] == 'CAPTION_YOLO_NEAREST':
         logger.info("Creating CaptionYoloNearestEngine engine")
         engine = CaptionYoloNearestEngine(config, device, config_path=config_path)
@@ -54,7 +52,7 @@ class PageParser:
 
         self.device = device if device is not None else get_default_device()
 
-        self.engines = self.init_engines(config, config_path, operation_factory)
+        self.engines: list[LayoutProcessingEngine] = self.init_engines(config, config_path, operation_factory)
 
     def process_page(self, image, page_layout):
         for engine in self.engines:
@@ -80,3 +78,7 @@ class PageParser:
                 self.logger.info(f"Engine for section {section_name} could not be created.")
 
         return engines
+
+    @property
+    def requires_lines(self):
+        return any([engine.requires_lines for engine in self.engines])
