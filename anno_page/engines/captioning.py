@@ -3,107 +3,28 @@ import cv2
 import json
 import torch
 import base64
-import logging
 import requests
 import numpy as np
 
+from jinja2 import Template
 from multiprocessing import Pool
 
 from pero_ocr.utils import compose_path, config_get_list
-from pero_ocr.layout_engines.cnn_layout_engine import LayoutEngineYolo
 
-from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata
-from anno_page.enums.language import Language
-from anno_page.enums.line_relation import LineRelation
+from anno_page.core.metadata import RelatedLinesMetadata
+from anno_page.engines import LayoutProcessingEngine, YoloDetectionEngine
+from anno_page.enums import Language, LineRelation
 from anno_page.engines.helpers import find_nearest_region, find_lines_in_bbox
 
 
-class DummyImageCaptioning:
+class CaptionYoloNearestEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
-        self.device = device
+        super().__init__(config, device, config_path, requires_lines=True)
 
-        self.categories = config["categories"] if "categories" in config else None
-        np.random.seed(42)
-
-        self.logger = logging.getLogger(__name__)
-
-    def process_page(self, page_image, page_layout):
-        text_lines = list(page_layout.lines_iterator(["text", None]))
-
-        if self.categories is not None:
-            for region in page_layout.regions:
-                if region.category in self.categories:
-                    caption_lines_metadata = None
-                    reference_lines_metadata = None
-
-                    if len(text_lines) > 0:
-                        np.random.shuffle(text_lines)
-                        caption_lines = text_lines[:np.random.randint(2, 5)]
-                        self.logger.info(f"Caption lines for {region.id}: {len(caption_lines)}")
-
-                        np.random.shuffle(text_lines)
-                        reference_lines = text_lines[:np.random.randint(3, 8)]
-                        print(f"Reference lines for {region.id}: {len(reference_lines)}")
-
-                        reference_lines_text = " ".join([line.transcription for line in reference_lines if line.transcription])
-                        caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
-
-                        reference_lines_metadata = RelatedLinesMetadata(tag_id=f"rtf.{region.id}",
-                                                                        mods_id=f"MODS_{region.id}_RELATED_0001",
-                                                                        lines=reference_lines,
-                                                                        relation=LineRelation.REFERENCE,
-                                                                        description=reference_lines_text,
-                                                                        title=reference_lines_text)
-
-                        caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{region.id}",
-                                                                      mods_id=f"MODS_{region.id}_CAPTION_0001",
-                                                                      lines=caption_lines,
-                                                                      relation=LineRelation.CAPTION,
-                                                                      description=caption_lines_text,
-                                                                      title=caption_lines_text)
-
-                        for reference_line in reference_lines:
-                            reference_line.metadata = [reference_lines_metadata]
-
-                        for caption_line in caption_lines:
-                            caption_line.metadata = [caption_lines_metadata]
-
-                    metadata = GraphicalObjectMetadata(tag_id=region.id,
-                                                       mods_id=f"MODS_{region.id}",
-                                                       caption={
-                                                           Language.ENGLISH: "This is a caption",
-                                                           Language.CZECH: "Toto je popis"
-                                                       },
-                                                       topics={
-                                                           Language.ENGLISH: "Here, are, the, topics",
-                                                           Language.CZECH: "Tady, jsou, témata"
-                                                       },
-                                                       color={
-                                                           Language.ENGLISH: "color",
-                                                           Language.CZECH: "barva"
-                                                       },
-                                                       description="Object description",
-                                                       title="Object title",
-                                                       reference_lines_metadata=reference_lines_metadata,
-                                                       caption_lines_metadata=caption_lines_metadata)
-
-                    if region.metadata is None:
-                        region.metadata = metadata
-                    else:
-                        region.metadata.update(metadata)
-
-        return page_layout
-
-
-class CaptionYoloNearestEngine:
-    def __init__(self, config, device, config_path):
-        self.device = device
-        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(config['yolo_path'], config_path),
-                                            device=device,
-                                            image_size=config.get("yolo_image_size", fallback=None),
-                                            detection_threshold=config.getfloat("yolo_detection_threshold", fallback=0.2))
-
-        self.logger = logging.getLogger(__name__)
+        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(self.config['yolo_path'], self.config_path),
+                                            device=self.device,
+                                            image_size=self.config.get("yolo_image_size", fallback=None),
+                                            detection_threshold=self.config.getfloat("yolo_detection_threshold", fallback=0.2))
 
     def process_page(self, page_image, page_layout):
         yolo_result = self.yolo_engine.detect(page_image)
@@ -120,35 +41,27 @@ class CaptionYoloNearestEngine:
             linked_region = find_nearest_region(caption, page_layout, categories=["Image", "Photograph"])
 
             caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.id}",
-                                                          mods_id=f"MODS_{linked_region.id}_CAPTION_0001",
+                                                          mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
                                                           lines=caption_lines,
                                                           relation=LineRelation.CAPTION,
                                                           description=caption_lines_text,
                                                           title=caption_lines_text)
 
-            metadata = GraphicalObjectMetadata(tag_id=linked_region.id,
-                                               mods_id=f"MODS_{linked_region.id}",
-                                               caption_lines_metadata=caption_lines_metadata)
-
-            if linked_region.metadata is None:
-                linked_region.metadata = metadata
-            else:
-                linked_region.metadata.update(metadata)
+            linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
 
         return page_layout
 
 
-class CaptionYoloKeypointsEngine:
+class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
-        self.device = device
-        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(config['yolo_path'], config_path),
-                                            device=device,
-                                            image_size=config.get("yolo_image_size", fallback=None),
-                                            detection_threshold=config.getfloat("yolo_detection_threshold", fallback=0.2))
+        super().__init__(config, device, config_path, requires_lines=True)
 
-        self.yolo_keypoint_threshold = config.getfloat("yolo_keypoint_threshold", fallback=0.5)
+        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(self.config['yolo_path'], self.config_path),
+                                            device=self.device,
+                                            image_size=self.config.get("yolo_image_size", fallback=None),
+                                            detection_threshold=self.config.getfloat("yolo_detection_threshold", fallback=0.2))
 
-        self.logger = logging.getLogger(__name__)
+        self.yolo_keypoint_threshold = self.config.getfloat("yolo_keypoint_threshold", fallback=0.5)
 
     def process_page(self, page_image, page_layout):
         yolo_result = self.yolo_engine.detect(page_image)
@@ -173,40 +86,32 @@ class CaptionYoloKeypointsEngine:
             for caption_keypoint, caption_keypoint_conf in zip(caption_keypoints, caption_keypoints_confs):
                 if caption_keypoint_conf >= self.yolo_keypoint_threshold:
                     x, y = caption_keypoint
-                    region = find_nearest_region((x, y, x, y), page_layout, categories=["Image", "Photograph"])
-                    if region is not None:
-                        caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{region.id}",
-                                                                      mods_id=f"MODS_{region.id}_CAPTION_0001",
-                                                                      lines=caption_lines,
-                                                                      relation=LineRelation.CAPTION,
-                                                                      description=caption_lines_text,
-                                                                      title=caption_lines_text)
+                    linked_region = find_nearest_region((x, y, x, y), page_layout, categories=["Image", "Photograph"])
+                    if linked_region is not None:
+                        caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.id}",
+                                                                    mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
+                                                                    lines=caption_lines,
+                                                                    relation=LineRelation.CAPTION,
+                                                                    description=caption_lines_text,
+                                                                    title=caption_lines_text)
 
-                        metadata = GraphicalObjectMetadata(tag_id=region.id,
-                                                           mods_id=f"MODS_{region.id}",
-                                                           caption_lines_metadata=caption_lines_metadata)
-
-                        if region.metadata is None:
-                            region.metadata = metadata
-                        else:
-                            region.metadata.update(metadata)
+                        linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
 
         return page_layout
 
 
-class CaptionYoloOrganizerEngine:
+class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
-        self.device = device
-        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(config['yolo_path'], config_path),
-                                            device=device,
-                                            image_size=config.get("yolo_image_size", fallback=None),
-                                            detection_threshold=config.getfloat("yolo_detection_threshold", fallback=0.2))
+        super().__init__(config, device, config_path, requires_lines=True)
 
-        self.caption_organizer = CaptionOrganizer(model_path=compose_path(config['organizer_path'], config_path),
+        self.yolo_engine = LayoutEngineYolo(model_path=compose_path(self.config['yolo_path'], self.config_path),
+                                            device=self.device,
+                                            image_size=self.config.get("yolo_image_size", fallback=None),
+                                            detection_threshold=self.config.getfloat("yolo_detection_threshold", fallback=0.2))
+
+        self.caption_organizer = CaptionOrganizer(model_path=compose_path(self.config['organizer_path'], self.config_path),
                                                   device=self.device,
-                                                  categories=config_get_list(config, key="organizer_categories", fallback=[]))
-
-        self.logger = logging.getLogger(__name__)
+                                                  categories=config_get_list(self.config, key="organizer_categories", fallback=[]))
 
     def process_page(self, page_image, page_layout):
         yolo_result = self.yolo_engine.detect(page_image)
@@ -219,24 +124,18 @@ class CaptionYoloOrganizerEngine:
         regions = [region for region in page_layout.regions if region.category not in ("text", None)]
         assignment = self.caption_organizer.assign_captions_to_regions(regions, captions, page_image)
 
-        for region, caption in assignment:
+        for linked_region, caption in assignment:
             caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
             caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
-            caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{region.id}",
-                                                          mods_id=f"MODS_{region.id}_CAPTION_0001",
+
+            caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.id}",
+                                                          mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
                                                           lines=caption_lines,
                                                           relation=LineRelation.CAPTION,
                                                           description=caption_lines_text,
                                                           title=caption_lines_text)
 
-            metadata = GraphicalObjectMetadata(tag_id=region.id,
-                                               mods_id=f"MODS_{region.id}",
-                                               caption_lines_metadata=caption_lines_metadata)
-
-            if region.metadata is None:
-                region.metadata = metadata
-            else:
-                region.metadata.update(metadata)
+            linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
 
         return page_layout
 
@@ -288,16 +187,25 @@ class CaptionOrganizer:
         return bboxes, query_types
 
 
-class ChatGPTImageCaptioning:
-    def __init__(self, config, device, config_path):
-        self.config_path = config_path
+class PromptData:
+    def __init__(self, image=None, region=None, metadata=None, prompt=None, result=None):
+        self.image = image
+        self.region = region
+        self.metadata = metadata
+        self.prompt = prompt
+        self.result = result
 
-        self.api_key = config["api_key"]
-        self.max_image_size = config.getint('max_image_size', fallback=None)
-        self.categories = config_get_list(config, key="categories", fallback=None) if "categories" in config else None
-        self.num_processes = config.getint('num_processes', fallback=1)
-        self.prompt_settings = compose_path(config["prompt_settings"], self.config_path)
-        self.max_attempts = config.getint('max_attempts', fallback=3)
+
+class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
+    def __init__(self, config, device, config_path):
+        super().__init__(config, device, config_path)
+
+        self.api_key = self.config["api_key"]
+        self.max_image_size = self.config.getint('max_image_size', fallback=None)
+        self.categories = config_get_list(self.config, key="categories", fallback=None) if "categories" in self.config else None
+        self.num_processes = self.config.getint('num_processes', fallback=1)
+        self.prompt_settings = compose_path(self.config["prompt_settings"], self.config_path)
+        self.max_attempts = self.config.getint('max_attempts', fallback=3)
 
         api_key_path = os.path.join(self.config_path, self.api_key)
         if os.path.exists(api_key_path):
@@ -306,45 +214,35 @@ class ChatGPTImageCaptioning:
 
         with open(self.prompt_settings, 'r') as f:
             prompt_settings = json.load(f)
+
         self.prompt_model = prompt_settings.get("model", "gpt-4o-mini")
         self.prompt_text = prompt_settings["text"]
         self.prompt_max_tokens = prompt_settings.get("max_tokens", 500)
 
-        self.logger = logging.getLogger(__name__)
-
     def process_page(self, page_image, page_layout):
-        regions = []
-        images = []
+        data = []
 
         for region in page_layout.regions:
-            if self.categories is None and region.category not in (None, 'text') or region.category in self.categories:
+            if (self.categories is None and region.category not in (None, 'text')) or (self.categories is not None and region.category in self.categories):
                 image = self.crop_region_image(page_image, region)
 
                 if image.size == 0:
-                    self.logger.warning(f"Empty region detected {region.id} ({region.category}): {x1},{y1} {x2},{y2}")
+                    self.logger.warning(f"Empty region detected {region.id} ({region.category}), skipping captioning.")
 
                 else:
-                    images.append(image)
-                    regions.append(region)
+                    data.append(self.prepare_prompt_data(image, region, page_layout))
 
         current_attempt = 0
-        while len(images) > 0 and current_attempt < self.max_attempts:
-            image_captions = self.process_images_and_regions(images, regions)
+
+        unfinished_data = data
+        while len(unfinished_data) > 0 and current_attempt < self.max_attempts:
+            self.process_elements(unfinished_data)
+            self.process_image_captions(unfinished_data)
 
             current_attempt += 1
-            next_attempt_images = []
-            next_attempt_regions = []
 
-            for image, region, image_caption in zip(images, regions, image_captions):
-                result = self.process_image_caption(region, image_caption)
-                if not result:
-                    next_attempt_images.append(image)
-                    next_attempt_regions.append(region)
-
-            images = next_attempt_images
-            regions = next_attempt_regions
-
-            self.logger.info(f"Captioning attempt {current_attempt} completed, {len(images)} element{'s' if len(images) > 1 else ''} remaining.")
+            unfinished_data = [item for item in data if item.result is None]
+            self.logger.info(f"Captioning attempt {current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) > 1 else ''} remaining.")
 
         return page_layout
 
@@ -367,20 +265,43 @@ class ChatGPTImageCaptioning:
 
         return image
 
-    def process_images_and_regions(self, images, regions):
+    def prepare_prompt_data(self, image, region, page_layout):
+        if type(self.prompt_text) == dict:
+            if region.category in self.prompt_text:
+                prompt_template = Template(self.prompt_text[region.category])
+            elif "default" in self.prompt_text:
+                prompt_template = Template(self.prompt_text["default"])
+            else:
+                raise ValueError(f"No prompt template found for category '{region.category}' and no default template provided.")
+        else:
+            prompt_template = Template(self.prompt_text)
+
+        page_metadata = page_layout.metadata.get("anno_page_metadata", None)
+
+        prompt = prompt_template.render(page_metadata if page_metadata else [], category=region.category)
+
+        return PromptData(
+            image=image,
+            region=region,
+            metadata=page_metadata,
+            prompt=prompt
+        )
+
+    def process_elements(self, data: list[PromptData]):
         if self.num_processes > 1:
             with Pool(self.num_processes) as p:
-                image_captions = p.map(self.generate_image_caption, images)
+                p.map(self.generate_image_caption, data)
         else:
-            image_captions = [self.generate_image_caption(image) for image in images]
+            for item in data:
+                self.generate_image_caption(item)
 
-        return image_captions
-
-    def generate_image_caption(self, image):
+    def generate_image_caption(self, item: PromptData):
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
+
+        self.logger.debug(f"Generating caption for region {item.region.id} with prompt: {item.prompt}")
 
         payload = {
             "model": self.prompt_model,
@@ -390,12 +311,12 @@ class ChatGPTImageCaptioning:
                     "content": [
                         {
                             "type": "text",
-                            "text": self.prompt_text
+                            "text": item.prompt
                         },
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:image/jpeg;base64,{self.encode_image(image)}"
+                                "url": f"data:image/jpeg;base64,{self.encode_image(item.image)}"
                             }
                         }
                     ]
@@ -408,55 +329,46 @@ class ChatGPTImageCaptioning:
 
         try:
             image_caption = response.json()["choices"][0]["message"]["content"]
+            self.logger.info(f"Successfully generated caption for region {item.region.id}: {image_caption}")
         except:
-            image_caption = ""
+            image_caption = None
+            self.logger.warning(f"Failed to get caption from API for region {item.region.id}: {response.text}")
 
-        return image_caption
+        item.result = image_caption
 
-    def process_image_caption(self, region, image_caption):
-        try:
-            image_caption_json = json.loads(image_caption)
-        except json.JSONDecodeError:
-            self.logger.error(f"Failed to parse image caption JSON for region {region.id}: {image_caption}")
-            return False
+    def process_image_captions(self, data: list[PromptData]):
+        for item in data:
+            if item.result is None:
+                continue
 
-        if len(image_caption_json) == 0:
-            self.logger.warning(f"Empty image caption JSON for region {region.id}: {image_caption}")
-            return False
+            try:
+                image_caption_json = json.loads(item.result)
+            except:
+                self.logger.error(f"Failed to parse image caption JSON for region {item.region.id}: {item.result}")
+                item.result = None
+                continue
 
-        caption_en = image_caption_json.get("caption_en", None)
-        caption_cz = image_caption_json.get("caption_cz", None)
-        topics_en = image_caption_json.get("topics_en", None)
-        topics_cz = image_caption_json.get("topics_cz", None)
-        color_en = image_caption_json.get("color_en", None)
-        color_cz = image_caption_json.get("color_cz", None)
+            if len(image_caption_json) == 0:
+                self.logger.warning(f"Empty image caption JSON for region {item.region.id}: {item.result}")
+                item.result = None
+                continue
 
-        # TODO: jak se ma system chovat, kdyz metadata pro region uz existuji? maji se jen doplnit, nebo prepsat?
-        metadata = GraphicalObjectMetadata(tag_id=region.id,
-                                           mods_id=f"MODS_{region.id}",
-                                           caption={
-                                               Language.ENGLISH: caption_en,
-                                               Language.CZECH: caption_cz
-                                           },
-                                           topics={
-                                               Language.ENGLISH: topics_en,
-                                               Language.CZECH: topics_cz
-                                           },
-                                           color={
-                                               Language.ENGLISH: color_en,
-                                               Language.CZECH: color_cz
-                                           },
-                                           caption_lines_metadata=None,
-                                           reference_lines_metadata=None)
+            item.region.graphical_metadata.caption = {
+                Language.ENGLISH: image_caption_json.get("caption_en", None),
+                Language.CZECH: image_caption_json.get("caption_cz", None)
+            }
 
-        if region.metadata is None:
-            region.metadata = metadata
-        else:
-            region.metadata.update(metadata)
+            item.region.graphical_metadata.topics = {
+                Language.ENGLISH: image_caption_json.get("topics_en", None),
+                Language.CZECH: image_caption_json.get("topics_cz", None)
+            }
 
-        self.logger.info(f"Successfully processed caption for region {region.id}")
+            item.region.graphical_metadata.color = {
+                Language.ENGLISH: image_caption_json.get("color_en", None),
+                Language.CZECH: image_caption_json.get("color_cz", None)
+            }
 
-        return True
+            self.logger.info(f"Successfully processed caption for region {item.region.id}")
 
     @staticmethod
     def encode_image(image):

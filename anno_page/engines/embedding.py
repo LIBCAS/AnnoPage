@@ -6,54 +6,99 @@ from sentence_transformers import SentenceTransformer
 
 from pero_ocr.utils import compose_path, config_get_list
 
-from anno_page.core.embedding import ElementEmbeddings, Element, ProcessingInfo
+from anno_page import globals
+from anno_page.engines import BaseEngine, LayoutProcessingEngine
+from anno_page.enums import Category, Language
+from anno_page.core.embedding import ObjectEmbedding, ProcessingInfo
 
 
-class ClipEmbeddingEngine:
+class ClipImageEmbeddingEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
-        self.device = device
-        self.model_name = config["MODEL"]
-        self.precision = int(config["PRECISION"]) if "PRECISION" in config and config["PRECISION"] is not None else None
-        self.categories = config_get_list(config, key="categories", fallback=None) if "categories" in config else None
+        super().__init__(config, device, config_path)
 
-        self.model = SentenceTransformer(self.model_name, device=device)
+        self.model_name = self.config["MODEL"]
+        self.decimal_places = self.config.getint("DECIMAL_PLACES", None)
+        self.precision = self.config.get("PRECISION", "float16")
+        self.categories = config_get_list(self.config, key="categories", fallback=None) if "categories" in self.config else None
+
+        # TODO: use precision when loading the model if supported
+
+        self.model = SentenceTransformer(self.model_name, device=self.device)
 
     def process_page(self, page_image, page_layout):
-        if page_layout.embedding_data is None:
-            page_layout.embedding_data = ElementEmbeddings()
-
-        page_embeddings = page_layout.embedding_data
-
         for region in page_layout.regions:
-            if self.categories is None and region.category not in (None, 'text') or region.category in self.categories:
+            if (self.categories is None and region.category not in (None, 'text')) or (self.categories is not None and region.category in self.categories):
                 x_min, y_min, x_max, y_max = region.get_polygon_bounding_box()
                 region_image = page_image[y_min:y_max, x_min:x_max]
 
                 if region_image.size == 0:
                     continue
 
-                object_uuid = region.metadata.mods_uuid if region.metadata is not None else uuid.uuid4()
+                object_uuid = region.graphical_metadata.mods_uuid if region.graphical_metadata is not None else uuid.uuid4()
 
                 region_embedding = self.model.encode(Image.fromarray(region_image), show_progress_bar=False).tolist()
 
-                if self.precision is not None:
-                    region_embedding = [round(value, self.precision) for value in region_embedding]
+                if self.decimal_places is not None:
+                    region_embedding = [round(value, self.decimal_places) for value in region_embedding]
 
-                region_embedding_data = Element(
+                category_name = Category.from_string(region.category).to_string(Language.MODS_GENRE_EN)
+
+                region_object_embedding = ObjectEmbedding(
                     id=f"uuid:{object_uuid}",
-                    alto_id=region.id,
-                    page_id=page_layout.id,
-                    category=str(region.category),
+                    tag_id=region.id,
+                    page_uuid=page_layout.id,
+                    category=category_name,
                     embedding=region_embedding,
                     processing_info=ProcessingInfo(
-                        system="AnnoPage",
-                        version="0.1",
+                        system=globals.software_name,
+                        version=globals.software_version,
                         datetime=datetime.now().isoformat(),
                         model=self.model_name,
+                        decimal_places=self.decimal_places,
                         precision=self.precision
                     )
                 )
 
-                page_embeddings.append(region_embedding_data)
+                region.embeddings.append(region_object_embedding)
 
         return page_layout
+
+
+class ClipTextEmbeddingEngine(BaseEngine):
+    def __init__(self, config, device, config_path):
+        super().__init__(config, device, config_path)
+
+        self.model_name = self.config["MODEL"]
+        self.decimal_places = self.config.getint("DECIMAL_PLACES", None)
+        self.precision = self.config.get("PRECISION", "float16")
+
+        self.model = SentenceTransformer(self.model_name, device=self.device)
+
+    def process(self, data: str | list[str]) -> list[ObjectEmbedding]:
+        if isinstance(data, str):
+            data = [data]
+
+        embeddings = self.model.encode(data, show_progress_bar=False).tolist()
+
+        if self.decimal_places is not None:
+            embeddings = [[round(value, self.decimal_places) for value in embedding] for embedding in embeddings]
+
+        result = []
+        for i, embedding in enumerate(embeddings):
+            result.append(ObjectEmbedding(
+                id="",
+                tag_id="",
+                page_uuid="",
+                category="text",
+                embedding=embedding,
+                processing_info=ProcessingInfo(
+                    system=globals.software_name,
+                    version=globals.software_version,
+                    datetime=datetime.now().isoformat(),
+                    model=self.model_name,
+                    decimal_places=self.decimal_places,
+                    precision=self.precision
+                )
+            ))
+
+        return result
