@@ -83,7 +83,7 @@ class YoloDetector:
 
     def detect(self, image):
         results = self.model(image, conf=self.detection_threshold, imgsz=self.image_size, verbose=False)
-        return results
+        return results[0]
 
     @property
     def names(self):
