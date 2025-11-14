@@ -1,6 +1,7 @@
 import os
 import re
 import cv2
+import json
 import time
 import torch
 import logging
@@ -14,7 +15,6 @@ from multiprocessing import Pool
 from pero_ocr.core.layout import PageLayout, ALTOVersion
 
 from anno_page.core.layout import render_to_image, add_page_layout_to_alto
-from anno_page.core.embedding import ElementEmbeddings
 from anno_page.core.page_parser import PageParser
 
 
@@ -26,6 +26,8 @@ def parse_arguments():
     group1 = parser.add_mutually_exclusive_group()
     group1.add_argument("--input-xml-path", help="Path to directory with PAGE XML files", required=False, default=None)
     group1.add_argument("--input-alto-path", help="Path to directory with ALTO XML files", required=False, default=None)
+
+    parser.add_argument("--input-metadata-path", help="Path to JSON file with metadata for input images.", required=False, default=None)
 
     parser.add_argument("--output-xml-path", help="Path to directory where PAGE XML files will be saved.")
     parser.add_argument("--output-alto-path", help="Path to directory where ALTO files will be saved.")
@@ -142,7 +144,7 @@ class Computator:
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def __call__(self, image_file_name, file_id, index, ids_count):
+    def __call__(self, image_file_name, file_id, index, ids_count, file_metadata=None):
         self.logger.info(f"Processing {file_id}")
         start_time = time.time()
 
@@ -156,15 +158,19 @@ class Computator:
 
             alto_file_path = None
             page_layout = PageLayout(id=file_id, page_size=(image.shape[0], image.shape[1]))
+
             self.logger.info(f"Created empty page layout for id: '{file_id}'.")
 
             if self.input_alto_path is not None:
-                alto_file_path = os.path.join(self.input_alto_path, file_id + '.xml')
-                if os.path.isfile(alto_file_path):
-                    page_layout.from_altoxml(alto_file_path)
-                    self.logger.info(f"Loaded ALTO file: '{alto_file_path}'.")
+                if not self.page_parser.requires_lines:
+                    self.logger.info("Page parser does not require lines, skipping ALTO file loading.")
                 else:
-                    self.logger.warning(f"ALTO file does not exist: '{alto_file_path}'.")
+                    alto_file_path = os.path.join(self.input_alto_path, file_id + '.xml')
+                    if os.path.isfile(alto_file_path):
+                        page_layout.from_altoxml(alto_file_path)
+                        self.logger.info(f"Loaded ALTO file: '{alto_file_path}'.")
+                    else:
+                        self.logger.warning(f"ALTO file does not exist: '{alto_file_path}'.")
             elif self.input_xml_path is not None:
                 xml_file_path = os.path.join(self.input_xml_path, file_id + '.xml')
                 if os.path.isfile(xml_file_path):
@@ -173,6 +179,7 @@ class Computator:
                 else:
                     self.logger.warning(f"PAGE XML file does not exist: '{xml_file_path}'.")
 
+            page_layout.metadata["anno_page_metadata"] = file_metadata
             page_layout = self.page_parser.process_page(image, page_layout)
 
             if self.output_xml_path is not None:
@@ -186,23 +193,23 @@ class Computator:
                     alto = ET.parse(alto_file_path, parser)
                     add_page_layout_to_alto(page_layout, alto.getroot())
 
-                    with open(output_alto_path, 'w') as file:
+                    with open(output_alto_path, 'w', encoding="utf-8") as file:
                         file.write(ET.tostring(alto, pretty_print=True, encoding="utf-8", xml_declaration=True).decode("utf-8"))
 
                 else:
                     page_layout.to_altoxml(output_alto_path, version=ALTOVersion.ALTO_v4_4)
 
             if self.output_embeddings_path is not None:
-                if page_layout.embedding_data is None:
-                    page_layout.embedding_data = ElementEmbeddings()
+                embeddings = page_layout.get_all_embeddings()
 
                 extension = 'jsonl' if self.embeddings_jsonlines else 'json'
                 embeddings_file = os.path.join(self.output_embeddings_path, f"{file_id}.{extension}")
                 with open(embeddings_file, 'w') as file:
                     if self.embeddings_jsonlines:
-                        file.write(page_layout.embedding_data.model_dump_jsonlines() + "\n")
+                        for embedding in embeddings:
+                            file.write(embedding.model_dump_json() + "\n")
                     else:
-                        file.write(page_layout.embedding_data.model_dump_json(indent=2) + "\n")
+                        file.write(embeddings.model_dump_json(indent=2) + "\n")
 
             if self.output_render_path is not None:
                 render = render_to_image(image, page_layout)
@@ -249,6 +256,9 @@ def main():
     if args.input_alto_path is not None:
         config['PARSE_FOLDER']['INPUT_ALTO_PATH'] = args.input_alto_path
 
+    if args.input_metadata_path is not None:
+        config['PARSE_FOLDER']['INPUT_METADATA_PATH'] = args.input_metadata_path
+
     if args.output_xml_path is not None:
         config['PARSE_FOLDER']['OUTPUT_XML_PATH'] = args.output_xml_path
 
@@ -268,6 +278,7 @@ def main():
     input_image_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_IMAGE_PATH')
     input_xml_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_XML_PATH')
     input_alto_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_ALTO_PATH')
+    input_metadata_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_METADATA_PATH')
     output_xml_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_XML_PATH')
     output_alto_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_ALTO_PATH')
     output_embeddings_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_EMBEDDINGS_PATH')
@@ -286,6 +297,11 @@ def main():
 
     if output_render_path is not None:
         create_dir_if_not_exists(output_render_path)
+
+    files_metadata = {}
+    if input_metadata_path is not None:
+        with open(input_metadata_path, 'r') as file:
+            files_metadata = json.load(file)
 
     images_to_process = []
     ids_to_process = []
@@ -321,11 +337,13 @@ def main():
         with Pool(processes=args.process_count) as pool:
             tasks = []
             for index, (file_id, image_file_name) in enumerate(zip(ids_to_process, images_to_process)):
-                tasks.append((image_file_name, file_id, index, len(ids_to_process)))
+                file_metadata = files_metadata.get(image_file_name, None)
+                tasks.append((image_file_name, file_id, index, len(ids_to_process), file_metadata))
             results = pool.starmap(computator, tasks)
     else:
         for index, (file_id, image_file_name) in enumerate(zip(ids_to_process, images_to_process)):
-            results.append(computator(image_file_name, file_id, index, len(ids_to_process)))
+            file_metadata = files_metadata.get(image_file_name, None)
+            results.append(computator(image_file_name, file_id, index, len(ids_to_process), file_metadata))
 
     return 0
 
