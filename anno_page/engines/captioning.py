@@ -290,11 +290,17 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
 
     def process_elements(self, data: list[PromptData]):
         if self.num_processes > 1:
+            self.logger.debug(f"Processing image captions in parallel using {self.num_processes} processes.")
             with Pool(self.num_processes) as p:
-                p.map(self.generate_image_caption, data)
+                image_captions = p.map(self.generate_image_caption, data)
+
+            for item, image_caption in zip(data, image_captions):
+                item.result = image_caption
         else:
+            self.logger.debug("Processing image captions sequentially.")
             for item in data:
-                self.generate_image_caption(item)
+                image_caption = self.generate_image_caption(item)
+                item.result = image_caption
 
     def generate_image_caption(self, item: PromptData):
         headers = {
@@ -335,11 +341,12 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
             image_caption = None
             self.logger.warning(f"Failed to get caption from API for region {item.region.id}: {response.text}")
 
-        item.result = image_caption
+        return image_caption
 
     def process_image_captions(self, data: list[PromptData]):
         for item in data:
             if item.result is None:
+                self.logger.debug(f"No caption result for region {item.region.id}, skipping processing.")
                 continue
 
             try:
