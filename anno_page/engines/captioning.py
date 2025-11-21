@@ -208,7 +208,7 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
         self.prompt_settings = compose_path(self.config["prompt_settings"], self.config_path)
         self.max_attempts = self.config.getint('max_attempts', fallback=3)
 
-        api_key_path = os.path.join(self.config_path, self.api_key)
+        api_key_path = compose_path(self.api_key, self.config_path)
         if os.path.exists(api_key_path):
             with open(api_key_path, 'r') as f:
                 self.api_key = f.read().strip()
