@@ -1,20 +1,14 @@
-import cv2
 import argparse
-import configparser
-import json
-import logging.config
+import logging
 import os
-import subprocess
 import sys
-import time
-from collections import defaultdict
+import subprocess
 
-from doc_api.api.schemas.base_objects import Job, JobLease, ProcessingState
+from typing import Optional
 
-from api.helpers.adapter import Adapter
-from api.helpers.connector import Connector
-from api.helpers.processing_setup import ProcessingSetup
-from api.helpers.utils import create_zip_archive
+from doc_api.api.schemas.base_objects import Job
+from doc_api.connector import Connector
+from doc_worker.doc_worker_wrapper import DocWorkerWrapper, WorkerResponse
 
 logger = logging.getLogger(__name__)
 
@@ -25,281 +19,121 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("--api-url", type=str, help="URL of the API endpoint.")
     parser.add_argument("--api-key", type=str, help="API key for authentication.")
-    parser.add_argument("--wait", help="If set, the worker will wait the specified number of seconds before getting new job if there was no job previously.", required=False, default=None, type=int)
-    parser.add_argument("--default-configs", help="Path to directory with default configs.", required=True, type=str)
+
+    parser.add_argument("--base-dir", help="Base directory for jobs and engines (creates subdirectories 'jobs' and 'engines')")
+    parser.add_argument("--jobs-dir", help="Directory for job data (overrides base-dir/jobs)")
+    parser.add_argument("--engines-dir", help="Directory for engine files (overrides base-dir/engines)")
+
+    parser.add_argument("--polling-interval", default=1.0, type=float, help="Time in seconds to wait between job requests.")
+    parser.add_argument("--cleanup-job-dir", action="store_true", help="Remove job directory after successful processing")
+    parser.add_argument("--cleanup-old-engines", action="store_true", help="Remove old engine versions when downloading new ones")
+
+    parser.add_argument("--logging-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO", help="Logging level")
 
     return parser.parse_args()
 
 
-def process_job(adapter: Adapter, job: Job, default_configs: str):
-    setup = ProcessingSetup.from_job(job)
+def setup_logging(logging_level):
+    level = logging.getLevelName(logging_level)
 
-    download_data(adapter, setup)
-    download_json(adapter, setup)
+    console_log_formatter = logging.Formatter('[%(levelname)s|%(asctime)s|%(filename)s:%(name)s]: %(message)s', datefmt="%Y-%m-%d_%H-%M-%S")
 
-    update_processing_setup(setup)
-    prepare_processing_config(setup, default_configs)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
 
-    run_processing(setup)
+    if not root_logger.handlers:
+        console_handler = logging.StreamHandler()
+        root_logger.addHandler(console_handler)
 
-    prepare_processing_result(setup)
-
-    upload_results(adapter, setup)
-    set_job_finished(adapter)
-
-
-def download_data(adapter: Adapter, setup: ProcessingSetup):
-    images = setup.job.images
-
-    # TODO: log if images is None
-
-    for image_info in images:
-        download_image(adapter, setup, image_info)
-
-        if setup.job.alto_required:
-            download_alto(adapter, setup, image_info)
+    root_handler = root_logger.handlers[0]
+    root_handler.setFormatter(console_log_formatter)
 
 
-def download_image(adapter: Adapter, setup: ProcessingSetup, image_info):
-    image = adapter.get_image(image_info.id)
+class AnnoPageWorker(DocWorkerWrapper):
+    processing_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../user_scripts/parse_folder.py")
 
-    if image is not None:
-        image_path = os.path.join(setup.images_directory, f"{image_info.name}.jpg")
-        os.makedirs(setup.images_directory, exist_ok=True)
-        cv2.imwrite(image_path, image)
-    else:
-        # TODO: log error
-        pass
+    def process_job(self,
+                    job: Job,
+                    images_dir: str,
+                    results_dir: str,
+                    alto_dir: Optional[str] = None,
+                    page_xml_dir: Optional[str] = None,
+                    meta_file: Optional[str] = None,
+                    engine_dir: Optional[str] = None) -> WorkerResponse:
 
+        process_env = os.environ.copy()
+        process_params = [
+            "python", self.processing_script,
+            "--config", os.path.join(engine_dir, "config.ini"),
+            "--input-image-path", images_dir,
+        ]
 
-def download_alto(adapter: Adapter, setup: ProcessingSetup, image_info):
-    alto = adapter.get_alto(image_info.id)
-    if alto is not None:
-        alto_path = os.path.join(setup.alto_directory, f"{image_info.name}.xml")
-        os.makedirs(setup.alto_directory, exist_ok=True)
-        with open(alto_path, "w", encoding="utf-8") as file:
-            file.write(alto)
-    else:
-        # TODO: log error
-        pass
+        if job.alto_required:
+            process_params += ["--input-alto-path", alto_dir]
 
+        if job.meta_json_required:
+            process_params += ["--input-metadata-path", meta_file]
 
-def download_json(adapter: Adapter, setup: ProcessingSetup):
-    meta_json = adapter.get_meta_json()
-    if meta_json is not None:
-        with open(setup.meta_json, "w", encoding="utf-8") as file:
-            file.write(meta_json)
-    else:
-        # TODO: log error
-        pass
-
-
-def update_processing_setup(setup: ProcessingSetup):
-    with open(setup.meta_json, "r") as file:
-        meta_json = json.load(file)
-
-    if "output" in meta_json:
-        output_config = meta_json["output"]
-        if "alto" in output_config and output_config["alto"]:
-            setup.output_alto = True
-
-        if "embeddings" in output_config and output_config["embeddings"]:
-            setup.output_embeddings = True
-
-        if "embeddings_jsonlines" in output_config and output_config["embeddings_jsonlines"]:
-            setup.embeddings_jsonlines = True
-
-
-def prepare_processing_config(setup: ProcessingSetup, default_configs: str):
-    with open(setup.meta_json, "r") as file:
-        meta_json = json.load(file)
-
-    processing_config = configparser.ConfigParser()
-    processing_config.add_section("PAGE_PARSER")
-    processing_config["PAGE_PARSER"]["RUN_LAYOUT_PARSER"] = "no"
-    processing_config["PAGE_PARSER"]["RUN_LINE_CROPPER"] = "no"
-    processing_config["PAGE_PARSER"]["RUN_OCR"] = "no"
-    processing_config["PAGE_PARSER"]["RUN_DECODER"] = "no"
-    processing_config["PAGE_PARSER"]["RUN_OPERATIONS"] = "no"
-
-    sections_counter = defaultdict(int)
-
-    if "object_detection" in meta_json and meta_json["object_detection"]:
-        processing_config["PAGE_PARSER"]["RUN_LAYOUT_PARSER"] = "yes"
-        add_object_detection_section(processing_config, meta_json["object_detection"], sections_counter, default_configs)
-
-    if "image_captioning" in meta_json and meta_json["image_captioning"]:
-        processing_config["PAGE_PARSER"]["RUN_OPERATIONS"] = "yes"
-
-        captioning_config = meta_json["image_captioning"]
-        if "engine" not in captioning_config or captioning_config["engine"] == "chatgpt":
-            add_gpt_image_captioning_section(processing_config, captioning_config, sections_counter, default_configs)
-            create_prompt_settings_json(setup, captioning_config, default_configs)
-
-    if "image_embedding" in meta_json and meta_json["image_embedding"]:
-        processing_config["PAGE_PARSER"]["RUN_OPERATIONS"] = "yes"
-        add_image_embedding_section(processing_config, meta_json["image_embedding"], sections_counter, default_configs)
-
-    save_config(setup, processing_config)
-
-
-def add_object_detection_section(processing_config: configparser.ConfigParser, object_detection_config_json: dict, sections_counter: dict, default_configs: str, config_name="object_detection.ini"):
-    object_detection_config_path = os.path.join(default_configs, config_name)
-
-    object_detection_config = configparser.ConfigParser()
-    object_detection_config.read(object_detection_config_path)
-
-    for config_section in object_detection_config.sections():
-        section_id = sections_counter[config_section]
-        new_section_name = f"{config_section}_{section_id}"
-        processing_config.add_section(new_section_name)
-        sections_counter[config_section] += 1
-
-        for key, value in object_detection_config[config_section].items():
-            processing_config[new_section_name][key] = value
-
-
-def add_image_embedding_section(processing_config: configparser.ConfigParser, image_embedding_config_json: dict, sections_counter: dict, default_configs: str, config_name="image_embedding.ini"):
-    image_embedding_config_path = os.path.join(default_configs, config_name)
-
-    image_embedding_config = configparser.ConfigParser()
-    image_embedding_config.read(image_embedding_config_path)
-
-    for config_section in image_embedding_config.sections():
-        section_id = sections_counter[config_section]
-        new_section_name = f"{config_section}_{section_id}"
-        processing_config.add_section(new_section_name)
-        sections_counter[config_section] += 1
-
-        for key, value in image_embedding_config[config_section].items():
-            processing_config[new_section_name][key] = value
-
-
-def add_gpt_image_captioning_section(processing_config: configparser.ConfigParser, image_captioning_config_json: dict, sections_counter: dict, default_configs: str, config_name="gpt_image_captioning.ini"):
-    image_captioning_config_path = os.path.join(default_configs, config_name)
-
-    image_captioning_config = configparser.ConfigParser()
-    image_captioning_config.read(image_captioning_config_path)
-
-    for config_section in image_captioning_config.sections():
-        section_id = sections_counter[config_section]
-        new_section_name = f"{config_section}_{section_id}"
-        processing_config.add_section(new_section_name)
-        sections_counter[config_section] += 1
-
-        for key, value in image_captioning_config[config_section].items():
-            processing_config[new_section_name][key] = value
-
-        if "api_key" in processing_config[new_section_name]:
-            processing_config[new_section_name]["api_key"] = image_captioning_config_json["api_key"]
-
-
-def create_prompt_settings_json(setup: ProcessingSetup, image_captioning_config_json: dict, default_configs: str, prompt_settings_name="image_captioning_prompt.json"):
-    default_prompt_settings_path = os.path.join(default_configs, prompt_settings_name)
-
-    with open(default_prompt_settings_path, "r") as file:
-        prompt_settings = json.load(file)
-
-    if "model" in image_captioning_config_json:
-        prompt_settings["model"] = image_captioning_config_json["model"]
-
-    if "text" in image_captioning_config_json:
-        prompt_settings["text"] = image_captioning_config_json["text"]
-
-    if "max_tokens" in image_captioning_config_json:
-        prompt_settings["max_tokens"] = image_captioning_config_json["max_tokens"]
-
-    with open(setup.prompt_settings, "w") as file:
-        json.dump(prompt_settings, file)
-
-
-def save_config(setup: ProcessingSetup, config: configparser.ConfigParser):
-    with open(setup.config, 'w') as file:
-        config.write(file)
-
-
-def run_processing(setup: ProcessingSetup):
-    # TODO: find better way to run the processing script
-    parse_folder_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../user_scripts/parse_folder.py")
-
-    process_env = os.environ.copy()
-    process_params = [
-        "python", parse_folder_path,
-        "--config", setup.config,
-        "--input-image-path", setup.images_directory,
-    ]
-
-    if setup.job.alto_required:
-        process_params += ["--input-alto-path", setup.alto_directory]
-
-    if setup.output_alto:
-        process_params += ["--output-alto-path", setup.output_directory]
-
-    if setup.output_embeddings:
-        process_params += ["--output-embeddings-path", setup.output_directory]
-
-    if setup.embeddings_jsonlines:
+        process_params += ["--output-alto-path", os.path.join(results_dir, "alto")]
+        process_params += ["--output-embeddings-path", os.path.join(results_dir, "embeddings")]
         process_params.append("--embeddings-jsonlines")
 
-    subprocess.run(process_params, env=process_env)
+        # if job.setup.output_alto:
+        #     process_params += ["--output-alto-path", os.path.join(results_dir, "alto")]
+        #
+        # if job.setup.output_embeddings:
+        #     process_params += ["--output-embeddings-path", os.path.join(results_dir, "embeddings")]
+        #
+        # if job.setup.embeddings_jsonlines:
+        #     process_params.append("--embeddings-jsonlines")
 
+        process = subprocess.Popen(
+            process_params,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=process_env,
+            text=True
+        )
 
-def prepare_processing_result(setup: ProcessingSetup):
-    files = [os.path.join(setup.output_directory, file) for file in os.listdir(setup.output_directory)]
-    create_zip_archive(setup.result, files)
+        stdout, stderr = process.communicate()
 
+        if process.returncode != 0:
+            logger.error(f"Job {job.id} processing failed with return code {process.returncode}")
+            logger.error(f"Stdout: {stdout}")
+            logger.error(f"Stderr: {stderr}")
+            result = WorkerResponse.fail(f"AnnoPage processing failed with return code {process.returncode}")
+        else:
+            logger.info(f"Job {job.id} processed successfully.")
+            logger.debug(f"Stdout: {stdout}")
+            logger.debug(f"Stderr: {stderr}")
+            result = WorkerResponse.ok()
 
-def upload_results(adapter: Adapter, setup: ProcessingSetup):
-    adapter.post_result(setup.result)
-
-
-def set_job_finished(adapter: Adapter):
-    adapter.patch_job_finish()
+        return result
 
 
 def main():
     args = parse_arguments()
+    
+    setup_logging(args.logging_level)
 
-    connector = Connector(worker_key=args.api_key)
-    adapter = Adapter(args.api_url, connector)
-    job = None
+    connector = Connector(args.api_key, user_agent="AnnoPageWorker/1.0")
+    logger.debug("Connector initialized.")
 
-    while True:
-        try:
-            job_lease = adapter.post_job_lease()
+    worker = AnnoPageWorker(
+        api_url=args.api_url,
+        connector=connector,
+        base_dir=args.base_dir,
+        jobs_dir=args.jobs_dir,
+        engines_dir=args.engines_dir,
+        polling_interval=args.polling_interval,
+        cleanup_job_dir=args.cleanup_job_dir,
+        cleanup_old_engines=args.cleanup_old_engines
+    )
+    logger.debug("AnnoPageWorker initialized.")
 
-            if job_lease is not None:
-                job = adapter.get_job(job_id=job_lease.id, set_if_successful=True)
-
-                if job is not None:
-                    logger.info(f"Processing job {job.id}.")
-                    process_job(adapter, job, args.default_configs)
-                else:
-                    logger.warning("Job lease received but job not found.")
-
-            else:
-                if args.wait is not None:
-                    logger.info(f"No job found, waiting {args.wait} second{'s' if args.wait > 1 else ''}.")
-                    time.sleep(args.wait)
-                else:
-                    logger.info('No job found, terminating worker!')
-                    break
-
-        except KeyboardInterrupt as e:
-            logger.warning('Keyboard interrupt, terminating worker!')
-
-            if job is not None:
-                pass
-
-            break
-
-        except Exception as e:
-            logger.critical('Unknown error occurred, worker will be terminated!')
-
-            if job is not None:
-                pass
-
-            raise
+    logger.debug("Starting worker ...")
+    worker.start()
+    logger.debug("Worker finished.")
 
     return 0
 
