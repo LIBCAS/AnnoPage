@@ -66,6 +66,7 @@ class AnnoPageWorker(DocWorkerWrapper):
             "python", self.processing_script,
             "--config", os.path.join(engine_dir, "config.ini"),
             "--input-image-path", images_dir,
+            "--logging-level", logging.getLevelName(logger.getEffectiveLevel())
         ]
 
         if job.alto_required:
