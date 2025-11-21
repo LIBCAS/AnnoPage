@@ -243,7 +243,7 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
             current_attempt += 1
 
             unfinished_data = [item for item in data if item.result is None]
-            self.logger.info(f"Captioning attempt {current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) > 1 else ''} remaining.")
+            self.logger.info(f"Captioning attempt #{current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) > 1 else ''} remaining.")
 
         return page_layout
 
