@@ -32,6 +32,8 @@ def parse_arguments():
     parser.add_argument("--output-xml-path", help="Path to directory where PAGE XML files will be saved.")
     parser.add_argument("--output-alto-path", help="Path to directory where ALTO files will be saved.")
     parser.add_argument("--output-render-path", help="Path to directory where rendered images will be saved.")
+    parser.add_argument("--output-crops-path", help="Path to directory where region crops will be saved.")
+    parser.add_argument("--output-image-captioning-prompts-path", help="Path to directory where image captioning prompts will be saved.")
     parser.add_argument("--output-embeddings-path", help="Path to directory where embeddings will be saved.")
     parser.add_argument("--embeddings-jsonlines", action='store_true', help="If set, the embedding output is saved in JSON Lines format instead of a single JSON array.")
     parser.add_argument('-s', '--skip-processed', action='store_true', required=False, help='If set, already processed files are skipped.')
@@ -131,6 +133,8 @@ class Computator:
                  output_alto_path,
                  output_embeddings_path,
                  output_render_path,
+                 output_crops_path,
+                 output_image_captioning_prompts_path,
                  embeddings_jsonlines=False):
         self.page_parser = page_parser
         self.input_image_path = input_image_path
@@ -140,6 +144,8 @@ class Computator:
         self.output_alto_path = output_alto_path
         self.output_embeddings_path = output_embeddings_path
         self.output_render_path = output_render_path
+        self.output_crops_path = output_crops_path
+        self.output_image_captioning_prompts_path = output_image_captioning_prompts_path
         self.embeddings_jsonlines = embeddings_jsonlines
 
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -209,12 +215,41 @@ class Computator:
                         for embedding in embeddings:
                             file.write(embedding.model_dump_json() + "\n")
                     else:
-                        file.write(embeddings.model_dump_json(indent=2) + "\n")
+                        json.dump([embedding.model_dump() for embedding in embeddings], file, ensure_ascii=False, indent=4)
 
             if self.output_render_path is not None:
                 render = render_to_image(image, page_layout)
                 render_file = str(os.path.join(self.output_render_path, file_id + '.jpg'))
                 cv2.imwrite(render_file, render, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+
+            if self.output_crops_path is not None:
+                for region in page_layout.regions:
+                    if region.category in (None, "text"):
+                        continue
+
+                    x1, y1, x2, y2 = region.get_polygon_bounding_box()
+                    crop = image[y1:y2, x1:x2]
+
+                    suffix = f"{region.id}"
+                    if region.graphical_metadata is not None:
+                        suffix = f"{region.graphical_metadata.tag_id}"
+
+                    crop_path = os.path.join(self.output_crops_path, f"{file_id}_{suffix}.jpg")
+                    cv2.imwrite(crop_path, crop, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+
+            if self.output_image_captioning_prompts_path is not None:
+                for region in page_layout.regions:
+                    if region.category in (None, "text"):
+                        continue
+
+                    if region.graphical_metadata is not None:
+                        region_prompts = region.graphical_metadata.prompts
+                        if region_prompts is not None:
+                            suffix = f"{region.graphical_metadata.tag_id}"
+                            prompts_path = os.path.join(self.output_image_captioning_prompts_path, f"{file_id}_{suffix}.txt")
+                            with open(prompts_path, 'w', encoding='utf-8') as file:
+                                json.dump(region_prompts, file, ensure_ascii=False, indent=4)
+
 
         except KeyboardInterrupt:
             traceback.print_exc()
@@ -271,6 +306,12 @@ def main():
     if args.output_render_path is not None:
         config['PARSE_FOLDER']['OUTPUT_RENDER_PATH'] = args.output_render_path
 
+    if args.output_crops_path is not None:
+        config['PARSE_FOLDER']['OUTPUT_CROPS_PATH'] = args.output_crops_path
+
+    if args.output_image_captioning_prompts_path is not None:
+        config['PARSE_FOLDER']['OUTPUT_IMAGE_CAPTIONING_PROMPTS_PATH'] = args.output_image_captioning_prompts_path
+
     device = get_device(args.device, args.gpu_id, logger)
 
     page_parser = PageParser(config, config_path=os.path.dirname(config_path), device=device)
@@ -283,6 +324,8 @@ def main():
     output_alto_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_ALTO_PATH')
     output_embeddings_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_EMBEDDINGS_PATH')
     output_render_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_RENDER_PATH')
+    output_crops_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_CROPS_PATH')
+    output_image_captioning_prompts_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_IMAGE_CAPTIONING_PROMPTS_PATH')
 
     embeddings_jsonlines = args.embeddings_jsonlines
 
@@ -297,6 +340,12 @@ def main():
 
     if output_render_path is not None:
         create_dir_if_not_exists(output_render_path)
+
+    if output_crops_path is not None:
+        create_dir_if_not_exists(output_crops_path)
+
+    if output_image_captioning_prompts_path is not None:
+        create_dir_if_not_exists(output_image_captioning_prompts_path)
 
     files_metadata = {}
     if input_metadata_path is not None:
@@ -330,6 +379,8 @@ def main():
                             output_alto_path=output_alto_path,
                             output_embeddings_path=output_embeddings_path,
                             output_render_path=output_render_path,
+                            output_crops_path=output_crops_path,
+                            output_image_captioning_prompts_path=output_image_captioning_prompts_path,
                             embeddings_jsonlines=embeddings_jsonlines)
 
     results = []

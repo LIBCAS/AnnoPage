@@ -11,7 +11,7 @@ from multiprocessing import Pool
 
 from pero_ocr.utils import compose_path, config_get_list
 
-from anno_page.core.metadata import RelatedLinesMetadata
+from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata
 from anno_page.engines import LayoutProcessingEngine
 from anno_page.engines.detection import YoloDetector
 from anno_page.enums import Language, LineRelation
@@ -208,7 +208,7 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
         self.prompt_settings = compose_path(self.config["prompt_settings"], self.config_path)
         self.max_attempts = self.config.getint('max_attempts', fallback=3)
 
-        api_key_path = os.path.join(self.config_path, self.api_key)
+        api_key_path = compose_path(self.api_key, self.config_path)
         if os.path.exists(api_key_path):
             with open(api_key_path, 'r') as f:
                 self.api_key = f.read().strip()
@@ -243,7 +243,7 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
             current_attempt += 1
 
             unfinished_data = [item for item in data if item.result is None]
-            self.logger.info(f"Captioning attempt {current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) > 1 else ''} remaining.")
+            self.logger.info(f"Captioning attempt #{current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) > 1 else ''} remaining.")
 
         return page_layout
 
@@ -290,11 +290,17 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
 
     def process_elements(self, data: list[PromptData]):
         if self.num_processes > 1:
+            self.logger.debug(f"Processing image captions in parallel using {self.num_processes} processes.")
             with Pool(self.num_processes) as p:
-                p.map(self.generate_image_caption, data)
+                image_captions = p.map(self.generate_image_caption, data)
+
+            for item, image_caption in zip(data, image_captions):
+                item.result = image_caption
         else:
+            self.logger.debug("Processing image captions sequentially.")
             for item in data:
-                self.generate_image_caption(item)
+                image_caption = self.generate_image_caption(item)
+                item.result = image_caption
 
     def generate_image_caption(self, item: PromptData):
         headers = {
@@ -335,11 +341,12 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
             image_caption = None
             self.logger.warning(f"Failed to get caption from API for region {item.region.id}: {response.text}")
 
-        item.result = image_caption
+        return image_caption
 
     def process_image_captions(self, data: list[PromptData]):
         for item in data:
             if item.result is None:
+                self.logger.debug(f"No caption result for region {item.region.id}, skipping processing.")
                 continue
 
             try:
@@ -354,20 +361,27 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
                 item.result = None
                 continue
 
-            item.region.graphical_metadata.caption = {
+            metadata: GraphicalObjectMetadata = item.region.graphical_metadata
+
+            metadata.caption = {
                 Language.ENGLISH: image_caption_json.get("caption_en", None),
                 Language.CZECH: image_caption_json.get("caption_cz", None)
             }
 
-            item.region.graphical_metadata.topics = {
+            metadata.topics = {
                 Language.ENGLISH: image_caption_json.get("topics_en", None),
                 Language.CZECH: image_caption_json.get("topics_cz", None)
             }
 
-            item.region.graphical_metadata.color = {
+            metadata.color = {
                 Language.ENGLISH: image_caption_json.get("color_en", None),
                 Language.CZECH: image_caption_json.get("color_cz", None)
             }
+
+            if metadata.prompts is None:
+                metadata.prompts = [item.prompt]
+            else:
+                metadata.prompts.append(item.prompt)
 
             self.logger.info(f"Successfully processed caption for region {item.region.id}")
 
