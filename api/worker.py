@@ -1,10 +1,15 @@
 import argparse
 import logging
+import configparser
+import json
 import os
 import sys
 import subprocess
+import shutil
 
 from typing import Optional
+
+from pero_ocr.utils import compose_path
 
 from doc_api.api.schemas.base_objects import Job
 from doc_api.connector import Connector
@@ -54,17 +59,27 @@ class AnnoPageWorker(DocWorkerWrapper):
 
     def process_job(self,
                     job: Job,
+                    job_log_file_handler: logging.FileHandler,
                     images_dir: str,
-                    results_dir: str,
+                    result_dir: str,
                     alto_dir: Optional[str] = None,
                     page_xml_dir: Optional[str] = None,
                     meta_file: Optional[str] = None,
                     engine_dir: Optional[str] = None) -> WorkerResponse:
+        config_path = os.path.join(engine_dir, "config.ini")
+
+        engine_settings = job.engine_settings if job.engine_settings else {}
+        outputs_settings = engine_settings.get("outputs", {})
+        image_captioning_settings = engine_settings.get("image_captioning", {})
+
+        if image_captioning_settings:
+            config_path = self.copy_engine_to_job_dir(engine_dir)
+            self.update_image_captioning_config(image_captioning_settings, config_path)
 
         process_env = os.environ.copy()
         process_params = [
             "python", self.processing_script,
-            "--config", os.path.join(engine_dir, "config.ini"),
+            "--config", config_path,
             "--input-image-path", images_dir,
             "--logging-level", logging.getLevelName(logger.getEffectiveLevel())
         ]
@@ -75,18 +90,23 @@ class AnnoPageWorker(DocWorkerWrapper):
         if job.meta_json_required:
             process_params += ["--input-metadata-path", meta_file]
 
-        process_params += ["--output-alto-path", os.path.join(results_dir, "alto")]
-        process_params += ["--output-embeddings-path", os.path.join(results_dir, "embeddings")]
-        process_params.append("--embeddings-jsonlines")
+        if outputs_settings.get("alto", False):
+            process_params += ["--output-alto-path", os.path.join(result_dir, "alto")]
 
-        # if job.setup.output_alto:
-        #     process_params += ["--output-alto-path", os.path.join(results_dir, "alto")]
-        #
-        # if job.setup.output_embeddings:
-        #     process_params += ["--output-embeddings-path", os.path.join(results_dir, "embeddings")]
-        #
-        # if job.setup.embeddings_jsonlines:
-        #     process_params.append("--embeddings-jsonlines")
+        if outputs_settings.get("embeddings", False):
+            process_params += ["--output-embeddings-path", os.path.join(result_dir, "embeddings")]
+
+        if outputs_settings.get("embeddings_jsonlines", False):
+            process_params.append("--embeddings-jsonlines")
+
+        if outputs_settings.get("renders", False):
+            process_params += ["--output-render-path", os.path.join(result_dir, "renders")]
+
+        if outputs_settings.get("crops", False):
+            process_params += ["--output-crops-path", os.path.join(result_dir, "crops")]
+
+        if outputs_settings.get("image_captioning_prompts", False):
+            process_params += ["--output-image-captioning-prompts-path", os.path.join(result_dir, "image_captioning_prompts")]
 
         process = subprocess.Popen(
             process_params,
@@ -110,6 +130,46 @@ class AnnoPageWorker(DocWorkerWrapper):
             result = WorkerResponse.ok()
 
         return result
+
+    @staticmethod
+    def update_image_captioning_config(settings: dict, config_path: str) -> None:
+        config = configparser.ConfigParser()
+        config.read(config_path)
+
+        engine_dir = os.path.dirname(config_path)
+
+        for section_name in config.sections():
+            section = config[section_name]
+            section_method = section["method"] if "method" in section else None
+            if section_method == "GPT_IMAGE_CAPTIONING":
+                if "api_key" in settings:
+                    config.set(section_name, "API_KEY", settings["api_key"])
+
+                if "categories" in settings:
+                    categories = json.dumps(settings["categories"], ensure_ascii=False)
+                    config.set(section_name, "CATEGORIES", categories)
+
+                config_prompt_settings_filename = section.get("PROMPT_SETTINGS", None)
+                if config_prompt_settings_filename is not None:
+                    config_prompt_settings_path = compose_path(config_prompt_settings_filename, engine_dir)
+                    with open(config_prompt_settings_path, "r", encoding="utf-8") as prompt_file:
+                        config_prompt_settings = json.load(prompt_file)
+
+                    for key, value in settings.items():
+                        if key in config_prompt_settings:
+                            config_prompt_settings[key] = value
+
+                    with open(config_prompt_settings_path, "w", encoding="utf-8") as prompt_file:
+                        json.dump(config_prompt_settings, prompt_file, indent=4)
+
+        with open(config_path, "w", encoding="utf-8") as config_file:
+            config.write(config_file)
+
+    def copy_engine_to_job_dir(self, engine_dir: str) -> str:
+        local_engine_dir = os.path.join(self.get_job_data_path(), "engine")
+        shutil.copytree(engine_dir, local_engine_dir)
+        local_config_path = os.path.join(local_engine_dir, "config.ini")
+        return local_config_path
 
 
 def main():
