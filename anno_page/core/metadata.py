@@ -1,4 +1,5 @@
 import uuid
+import logging
 from typing import Optional, Dict, List
 from lxml import etree as ET
 from datetime import datetime
@@ -7,6 +8,8 @@ from pero_ocr.core.layout import TextLine
 
 from anno_page import globals
 from anno_page.enums import Category, Language, LineRelation
+
+logger = logging.getLogger(__name__)
 
 
 class BaseMetadata:
@@ -289,7 +292,7 @@ class GraphicalObjectMetadata(BaseMetadata):
             self._add_caption_elements(mods, mods_namespace)
 
         if self.topics is not None:
-            self._add_topic_elements(mods, mods_namespace)
+            self._add_topics_elements(mods, mods_namespace)
 
         self._add_identifier_element(mods, mods_namespace, self.mods_uuid, identifier_type="uuid")
 
@@ -319,7 +322,7 @@ class GraphicalObjectMetadata(BaseMetadata):
             for language, color in self.color.items():
                 self._add_color_element(mods, mods_namespace, str(language), color)
         else:
-            print(f"Color is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
+            logger.warning(f"Color is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
 
     @staticmethod
     def _add_color_element(mods, mods_namespace, language, color):
@@ -337,7 +340,7 @@ class GraphicalObjectMetadata(BaseMetadata):
             for language, caption in self.caption.items():
                 self._add_caption_element(mods, mods_namespace, str(language), caption)
         else:
-            print(f"Caption is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
+            logger.warning(f"Caption is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
 
     @staticmethod
     def _add_caption_element(mods, mods_namespace, language, text):
@@ -346,19 +349,31 @@ class GraphicalObjectMetadata(BaseMetadata):
         abstract.attrib["altRepGroup"] = "abstract-1"
         abstract.attrib["lang"] = language
 
-    def _add_topic_elements(self, mods, mods_namespace):
-        if isinstance(self.topics, str):
-            self._add_topic_element(mods, mods_namespace, "", self.topics)
+    def _add_topics_elements(self, mods, mods_namespace):
+        if isinstance(self.topics, str) or isinstance(self.topics, list):
+            self._add_topic_elements(mods, mods_namespace, "", self.topics)
         elif isinstance(self.topics, dict):
             for language, topic in self.topics.items():
-                self._add_topic_element(mods, mods_namespace, str(language), topic)
+                self._add_topic_elements(mods, mods_namespace, str(language), topic)
         else:
-            print(f"Topic is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
+            logger.warning(f"Topic is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
+
+    def _add_topic_elements(self, mods, mods_namespace, language, topics):
+        if isinstance(topics, list):
+            topic_list = topics
+        elif isinstance(topics, str):
+            topic_list = topics.split(",")
+        else:
+            logger.warning(f"Topics is not a string or list in GraphicalObjectMetadata '{self.tag_id}'.")
+            return
+
+        for index, topic_text in enumerate(topic_list):
+            self._add_topic_element(mods, mods_namespace, language, topic_text.strip(), index + 1)
 
     @staticmethod
-    def _add_topic_element(mods, mods_namespace, language, text):
+    def _add_topic_element(mods, mods_namespace, language, text, index):
         subject = ET.SubElement(mods, f"{{{mods_namespace}}}subject")
-        subject.attrib["altRepGroup"] = "subject-1"
+        subject.attrib["altRepGroup"] = f"subject-{index}"
         topic = ET.SubElement(subject, f"{{{mods_namespace}}}topic")
         topic.text = text
         topic.attrib["lang"] = language
