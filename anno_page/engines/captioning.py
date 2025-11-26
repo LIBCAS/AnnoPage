@@ -11,7 +11,7 @@ from multiprocessing import Pool
 
 from pero_ocr.utils import compose_path, config_get_list
 
-from anno_page.core.metadata import RelatedLinesMetadata
+from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata
 from anno_page.engines import LayoutProcessingEngine
 from anno_page.engines.detection import YoloDetector
 from anno_page.enums import Language, LineRelation
@@ -361,20 +361,27 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
                 item.result = None
                 continue
 
-            item.region.graphical_metadata.caption = {
+            metadata: GraphicalObjectMetadata = item.region.graphical_metadata
+
+            metadata.caption = {
                 Language.ENGLISH: image_caption_json.get("caption_en", None),
                 Language.CZECH: image_caption_json.get("caption_cz", None)
             }
 
-            item.region.graphical_metadata.topics = {
+            metadata.topics = {
                 Language.ENGLISH: image_caption_json.get("topics_en", None),
                 Language.CZECH: image_caption_json.get("topics_cz", None)
             }
 
-            item.region.graphical_metadata.color = {
+            metadata.color = {
                 Language.ENGLISH: image_caption_json.get("color_en", None),
                 Language.CZECH: image_caption_json.get("color_cz", None)
             }
+
+            if metadata.prompts is None:
+                metadata.prompts = [item.prompt]
+            else:
+                metadata.prompts.append(item.prompt)
 
             self.logger.info(f"Successfully processed caption for region {item.region.id}")
 
