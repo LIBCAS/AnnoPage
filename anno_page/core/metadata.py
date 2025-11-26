@@ -200,13 +200,15 @@ class GraphicalObjectMetadata(BaseMetadata):
                  description: Optional[str] = None,
                  title: Optional[str | Dict[Language, str]] = None,
                  caption_lines_metadata: Optional[RelatedLinesMetadata] = None,
-                 reference_lines_metadata: Optional[RelatedLinesMetadata] = None):
+                 reference_lines_metadata: Optional[RelatedLinesMetadata] = None,
+                 prompts: Optional[List[str]] = None):
         super().__init__(tag_id, mods_id, mods_uuid)
         self.caption = caption
         self.topics = topics
         self.color = color
         self.description = description
         self.title = title
+        self.prompts = prompts
 
         self.caption_lines_metadata = caption_lines_metadata
         self.reference_lines_metadata = reference_lines_metadata
