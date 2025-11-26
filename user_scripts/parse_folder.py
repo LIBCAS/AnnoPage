@@ -209,7 +209,7 @@ class Computator:
                         for embedding in embeddings:
                             file.write(embedding.model_dump_json() + "\n")
                     else:
-                        file.write(embeddings.model_dump_json(indent=2) + "\n")
+                        json.dump([embedding.model_dump() for embedding in embeddings], file, ensure_ascii=False, indent=4)
 
             if self.output_render_path is not None:
                 render = render_to_image(image, page_layout)
