@@ -1,6 +1,27 @@
+import torch
 import numpy as np
 
 from shapely.geometry import Polygon
+
+
+DTYPE_MAPPING = {
+    "float32": torch.float32,
+    "fp32":    torch.float32,
+    "float16": torch.float16,
+    "fp16":    torch.float16,
+    "bfloat16": torch.bfloat16,
+    "bf16":     torch.bfloat16,
+}
+
+
+def set_model_dtype(model, dtype_str: str):
+    try:
+        torch_dtype = DTYPE_MAPPING[dtype_str.lower()]
+    except KeyError:
+        raise ValueError(f"Unsupported dtype string: '{dtype_str}'. Use one of: {list(DTYPE_MAPPING.keys())}")
+
+    model.to(dtype=torch_dtype)
+    return model
 
 
 def find_lines_in_bbox(bbox, page_layout, threshold=0.5):

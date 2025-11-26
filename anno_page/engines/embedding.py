@@ -8,6 +8,7 @@ from pero_ocr.utils import compose_path, config_get_list
 
 from anno_page import globals
 from anno_page.engines import BaseEngine, LayoutProcessingEngine
+from anno_page.engines.helpers import set_model_dtype
 from anno_page.enums import Category, Language
 from anno_page.core.embedding import ObjectEmbedding, ProcessingInfo
 
@@ -21,9 +22,8 @@ class ClipImageEmbeddingEngine(LayoutProcessingEngine):
         self.precision = self.config.get("PRECISION", "float16")
         self.categories = config_get_list(self.config, key="categories", fallback=None) if "categories" in self.config else None
 
-        # TODO: use precision when loading the model if supported
-
         self.model = SentenceTransformer(self.model_name, device=self.device)
+        self.model = set_model_dtype(self.model, self.precision)
 
     def process_page(self, page_image, page_layout):
         for region in page_layout.regions:
@@ -73,6 +73,7 @@ class ClipTextEmbeddingEngine(BaseEngine):
         self.precision = self.config.get("PRECISION", "float16")
 
         self.model = SentenceTransformer(self.model_name, device=self.device)
+        self.model = set_model_dtype(self.model, self.precision)
 
     def process(self, data: str | list[str]) -> list[ObjectEmbedding]:
         if isinstance(data, str):
