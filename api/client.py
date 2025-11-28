@@ -32,7 +32,7 @@ def parse_args():
     parser.add_argument("--polling-interval", default=1.0, type=float, help="Time in seconds to wait between result checks.")
     parser.add_argument("--logging-level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], default="INFO", help="Logging level.")
 
-    parser.add_argument("--list-engine-names", action="store_true", help="List available engine names and exit.")
+    parser.add_argument("--list-engines", action="store_true", help="List available engines and exit.")
 
     args = parser.parse_args()
     return args
@@ -117,7 +117,7 @@ def main():
 
     connector = Connector(args.api_key, user_agent="AnnoPageClient/1.0")
 
-    if args.list_engine_names:
+    if args.list_engines:
         adapter = Adapter(args.api_url, connector)
         engines = adapter.get_engines()
         output = format_engines(engines.data)
