@@ -18,5 +18,6 @@ class ObjectEmbedding(BaseModel):
     tag_id: str
     page_uuid: str
     category: str
+    source: str | None = None
     processing_info: ProcessingInfo
     embedding: list[float]

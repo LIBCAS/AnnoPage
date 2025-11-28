@@ -91,6 +91,7 @@ class ClipTextEmbeddingEngine(BaseEngine):
                 tag_id="",
                 page_uuid="",
                 category="text",
+                source=data[i],
                 embedding=embedding,
                 processing_info=ProcessingInfo(
                     system=globals.software_name,
