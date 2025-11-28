@@ -1,6 +1,6 @@
-# Worker and client for AnnoPageAPI
+# Worker, client, and routes for AnnoPageAPI
 
-This directory contains the implementation of the worker and client for AnnoPageAPI, which provides endpoints for managing processing jobs for AnnoPage. The API is based on [DocAPI](https://github.com/DCGM/DocAPI) and in this repository, we have custom implementations for the worker and client.
+This directory contains the implementation of the worker, client, and routes for AnnoPageAPI, which provides endpoints for managing processing jobs for AnnoPage. The API is based on [DocAPI](https://github.com/DCGM/DocAPI) and in this repository, we have custom implementations for the worker, client, and AnnoPage-specific routes.
 
 ## Worker
 The worker is responsible for processing jobs using AnnoPage. It periodically checks for new jobs, processes them, sends the results back to API, and updates their status in the API. Example usage of the worker:
@@ -39,3 +39,8 @@ python client.py \
     --api-key=ANNOPAGE_API_KEY \
     --api-url=ANNOPAGE_API_URL \
 ```
+
+## Routes
+
+The routes file contains definition of the AnnoPage-specific API endpoints. These endpoints are then integrated into the exsting routes provided by DocAPI. The AnnoPage-specific routes include endpoints for translating text, creating text embeddings, and evaluating image captioning prompts.
+
