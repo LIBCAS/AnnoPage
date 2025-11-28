@@ -39,8 +39,3 @@ python client.py \
     --api-key=ANNOPAGE_API_KEY \
     --api-url=ANNOPAGE_API_URL \
 ```
-
-## Routes
-
-The routes file contains definition of the AnnoPage-specific API endpoints. These endpoints are then integrated into the exsting routes provided by DocAPI. The AnnoPage-specific routes include endpoints for translating text, creating text embeddings, and evaluating image captioning prompts.
-
