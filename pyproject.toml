@@ -1,0 +1,47 @@
+[build-system]
+requires = [ "setuptools>=61" ]
+
+[project]
+name = "anno-page"
+version = "0.0.1"
+description = "AnnoPage"
+authors = [
+    {name = "Martin Kišš", email = "ikiss@fit.vut.cz"},
+    {name = "Michal Hradiš", email = "ihradis@fit.vut.cz"},
+    {name = "Martin Lhoták", email = "lhotak@lib.cas.cz"}
+]
+license = {file = "LICENSE"}
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "Jinja2",
+    "lxml",
+    "numpy",
+    "opencv_python",
+    "opencv_python_headless",
+    "Pillow",
+    "pydantic",
+    "Requests",
+    "safe_gpu",
+    "sentence_transformers",
+    "shapely",
+    "torch",
+    "transformers",
+    "ultralytics",
+    "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@metadata_implementation#egg=pero_ocr",
+    "docapi@git+https://github.com/DCGM/DocAPI"
+]
+
+[project.urls]
+homepage = "https://orbis.lib.cas.cz/"
+repository = "https://github.com/LIBCAS/AnnoPage"
+
+[tool.setuptools.package-dir]
+"anno_page" = "anno_page"
+"anno_page.api" = "api"
+"anno_page.user_scripts" = "user_scripts"
+
+[project.scripts]
+annopage = "anno_page.user_scripts.parse_folder:main"
+annopage_client = "anno_page.api.client:main"
+annopage_worker = "anno_page.api.worker:main"
