@@ -20,7 +20,7 @@ from anno_page.core.page_parser import PageParser
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", help="Path to config file.")
+    parser.add_argument("--config", help="Path to config file.", required=True)
     parser.add_argument("--input-image-path", help="Path to directory with images to process.")
 
     group1 = parser.add_mutually_exclusive_group()
