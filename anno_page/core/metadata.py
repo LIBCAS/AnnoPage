@@ -350,7 +350,8 @@ class GraphicalObjectMetadata(BaseMetadata):
     def _add_caption_element(mods, mods_namespace, language, text):
         abstract = ET.SubElement(mods, f"{{{mods_namespace}}}abstract")
         abstract.text = text
-        abstract.attrib["altRepGroup"] = "abstract-1"
+        abstract.attrib["altRepGroup"] = "caption-1"
+        abstract.attrib["type"] = "caption"
         abstract.attrib["lang"] = language
 
     def _add_topics_elements(self, mods, mods_namespace):
@@ -398,6 +399,7 @@ class GraphicalObjectMetadata(BaseMetadata):
         abstract = ET.SubElement(mods, f"{{{mods_namespace}}}abstract")
         abstract.text = text
         abstract.attrib["altRepGroup"] = "description-1"
+        abstract.attrib["type"] = "description"
 
         if language is not None:
             abstract.attrib["lang"] = language
