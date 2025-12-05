@@ -14,6 +14,11 @@ license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "doc-api@git+https://github.com/DCGM/DocAPI"
+]
+
+[project.optional-dependencies]
+full = [
     "Jinja2",
     "lxml",
     "numpy",
@@ -29,7 +34,6 @@ dependencies = [
     "transformers",
     "ultralytics",
     "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@metadata_implementation#egg=pero_ocr",
-    "docapi@git+https://github.com/DCGM/DocAPI"
 ]
 
 [project.urls]
