@@ -67,7 +67,13 @@ def format_engines(engines: list[Engine]) -> str:
     lines = ["Available engines:", ""]
     for engine in engines:
         lines.append(f"Name: '{engine.name}'")
-        lines.append(f"Description: {engine.description}")
+
+        if len(engine.description) > 80 or "\n" in engine.description:
+            lines.append("Description:")
+            lines.append(engine.description)
+        else:
+            lines.append(f"Description: {engine.description}")
+
         lines.append("")
 
     output = "\n".join(lines).strip()
