@@ -9,8 +9,7 @@ import numpy as np
 from jinja2 import Template
 from multiprocessing import Pool
 
-from pero_ocr.utils import compose_path, config_get_list
-
+from anno_page.core.utils import compose_path, config_get_list
 from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata
 from anno_page.engines import LayoutProcessingEngine
 from anno_page.engines.detection import YoloDetector
@@ -203,7 +202,7 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
 
         self.api_key = self.config["api_key"]
         self.max_image_size = self.config.getint('max_image_size', fallback=None)
-        self.categories = config_get_list(self.config, key="categories", fallback=None) if "categories" in self.config else None
+        self.categories = config_get_list(self.config, key="categories", fallback=None)
         self.num_processes = self.config.getint('num_processes', fallback=1)
         self.prompt_settings = compose_path(self.config["prompt_settings"], self.config_path)
         self.max_attempts = self.config.getint('max_attempts', fallback=3)

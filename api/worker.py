@@ -9,7 +9,7 @@ import shutil
 
 from typing import Optional
 
-from pero_ocr.utils import compose_path
+from anno_page.core.utils import compose_path
 
 from doc_api.api.schemas.base_objects import Job
 from doc_api.connector import Connector

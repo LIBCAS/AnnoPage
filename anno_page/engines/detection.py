@@ -3,8 +3,8 @@ import numpy as np
 import uuid
 from ultralytics import YOLO
 from pero_ocr.core.layout import RegionLayout
-from pero_ocr.utils import compose_path, config_get_list
 
+from anno_page.core.utils import compose_path, config_get_list
 from anno_page.core.metadata import GraphicalObjectMetadata
 from anno_page.engines import LayoutProcessingEngine
 from anno_page.enums import Category, Language
@@ -19,7 +19,7 @@ class YoloDetectionEngine(LayoutProcessingEngine):
                                      detection_threshold=self.config.getfloat("DETECTION_THRESHOLD", 0.2),
                                      image_size=self.config.getint("IMAGE_SIZE", 640))
 
-        self.categories = config_get_list(self.config, key="categories", fallback=None) if "categories" in self.config else None
+        self.categories = config_get_list(self.config, key="categories", fallback=None)
 
     def process_page(self, page_image, page_layout):
         results = self.detector(page_image)

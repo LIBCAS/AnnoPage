@@ -4,9 +4,8 @@ from PIL import Image
 from datetime import datetime
 from sentence_transformers import SentenceTransformer
 
-from pero_ocr.utils import compose_path, config_get_list
-
 from anno_page import globals
+from anno_page.core.utils import config_get_list
 from anno_page.engines import BaseEngine, LayoutProcessingEngine
 from anno_page.engines.helpers import set_model_dtype
 from anno_page.enums import Category, Language
@@ -20,7 +19,7 @@ class ClipImageEmbeddingEngine(LayoutProcessingEngine):
         self.model_name = self.config["MODEL"]
         self.decimal_places = self.config.getint("DECIMAL_PLACES", None)
         self.precision = self.config.get("PRECISION", "float16")
-        self.categories = config_get_list(self.config, key="categories", fallback=None) if "categories" in self.config else None
+        self.categories = config_get_list(self.config, key="categories", fallback=None)
 
         self.model = SentenceTransformer(self.model_name, device=self.device)
         self.model = set_model_dtype(self.model, self.precision)
