@@ -367,6 +367,11 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
                 Language.CZECH: image_caption_json.get("caption_cz", None)
             }
 
+            metadata.description = {
+                Language.ENGLISH: image_caption_json.get("description_en", None),
+                Language.CZECH: image_caption_json.get("description_cz", None)
+            }
+
             metadata.topics = {
                 Language.ENGLISH: image_caption_json.get("topics_en", None),
                 Language.CZECH: image_caption_json.get("topics_cz", None)

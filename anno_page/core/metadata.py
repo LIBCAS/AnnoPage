@@ -197,10 +197,10 @@ class GraphicalObjectMetadata(BaseMetadata):
                  tag_id,
                  mods_id,
                  mods_uuid=None,
+                 description: Optional[str| Dict[Language, str]] = None,
                  caption: Optional[str | Dict[Language, str]] = None,
                  topics: Optional[str | Dict[Language, str]] = None,
                  color: Optional[str | Dict[Language, str]] = None,
-                 description: Optional[str] = None,
                  title: Optional[str | Dict[Language, str]] = None,
                  caption_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  reference_lines_metadata: Optional[RelatedLinesMetadata] = None,
@@ -272,11 +272,10 @@ class GraphicalObjectMetadata(BaseMetadata):
         layout_tag.set("TYPE", "Structural")
         layout_tag.set("LABEL", category_en)
 
-        if self.description is not None:
-            layout_tag.set("DESCRIPTION", self.description)
-
         if self.title is not None:
             self._add_title_element(mods, mods_namespace, title=self.title)
+        elif self.caption_lines_metadata is not None and self.caption_lines_metadata.title is not None:
+            self._add_title_element(mods, mods_namespace, title=self.caption_lines_metadata.title)
 
         self._add_type_of_resource_element(mods, mods_namespace, category.to_type_of_resource())
 
@@ -290,6 +289,9 @@ class GraphicalObjectMetadata(BaseMetadata):
 
         if self.caption is not None:
             self._add_caption_elements(mods, mods_namespace)
+
+        if self.description is not None:
+            self._add_description_elements(mods, mods_namespace)
 
         if self.topics is not None:
             self._add_topics_elements(mods, mods_namespace)
@@ -320,7 +322,8 @@ class GraphicalObjectMetadata(BaseMetadata):
             self._add_color_element(mods, mods_namespace, "", self.color)
         elif isinstance(self.color, dict):
             for language, color in self.color.items():
-                self._add_color_element(mods, mods_namespace, str(language), color)
+                if color is not None:
+                    self._add_color_element(mods, mods_namespace, str(language), color)
         else:
             logger.warning(f"Color is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
 
@@ -338,7 +341,8 @@ class GraphicalObjectMetadata(BaseMetadata):
             self._add_caption_element(mods, mods_namespace, "", self.caption)
         elif isinstance(self.caption, dict):
             for language, caption in self.caption.items():
-                self._add_caption_element(mods, mods_namespace, str(language), caption)
+                if caption is not None:
+                    self._add_caption_element(mods, mods_namespace, str(language), caption)
         else:
             logger.warning(f"Caption is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
 
@@ -354,7 +358,8 @@ class GraphicalObjectMetadata(BaseMetadata):
             self._add_topic_elements(mods, mods_namespace, "", self.topics)
         elif isinstance(self.topics, dict):
             for language, topic in self.topics.items():
-                self._add_topic_elements(mods, mods_namespace, str(language), topic)
+                if topic is not None:
+                    self._add_topic_elements(mods, mods_namespace, str(language), topic)
         else:
             logger.warning(f"Topic is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
 
@@ -377,3 +382,22 @@ class GraphicalObjectMetadata(BaseMetadata):
         topic = ET.SubElement(subject, f"{{{mods_namespace}}}topic")
         topic.text = text
         topic.attrib["lang"] = language
+
+    def _add_description_elements(self, mods, mods_namespace):
+        if isinstance(self.description, str):
+            self._add_description_element(mods, mods_namespace, None, self.description)
+        elif isinstance(self.description, dict):
+            for language, description in self.description.items():
+                if description is not None:
+                    self._add_description_element(mods, mods_namespace, str(language), description)
+        else:
+            logger.warning(f"Description is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
+
+    @staticmethod
+    def _add_description_element(mods, mods_namespace, language, text):
+        abstract = ET.SubElement(mods, f"{{{mods_namespace}}}abstract")
+        abstract.text = text
+        abstract.attrib["altRepGroup"] = "description-1"
+
+        if language is not None:
+            abstract.attrib["lang"] = language
