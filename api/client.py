@@ -19,11 +19,14 @@ def parse_args():
     group1.add_argument("--list-engines", action="store_true", help="List available engines and exit.")
 
     group1.add_argument("--images", type=str, help="Path to directory with images.")
-    parser.add_argument("--output", type=str, help="Path to the output dir.", required=False, default="./")
-    parser.add_argument("--alto-xmls", type=str, help="Path to directory with ALTO XMLs.", required=False, default=None)
-    parser.add_argument("--page-xmls", type=str, help="Path to directory with PAGE XMLs.", required=False, default=None)
+
     parser.add_argument("--metadata", type=str, help="Path to the metadata JSON.", required=False, default=None)
     parser.add_argument("--engine-name", type=str, help="Name of the processing engine to use.", required=False, default=None)
+    parser.add_argument("--output", type=str, help="Path to the output dir.", required=False, default="./")
+
+    group2 = parser.add_mutually_exclusive_group(required=False)
+    group2.add_argument("--alto-xmls", type=str, help="Path to directory with ALTO XMLs.", required=False, default=None)
+    group2.add_argument("--page-xmls", type=str, help="Path to directory with PAGE XMLs.", required=False, default=None)
 
     parser.add_argument("--output-alto", action="store_true", help="Whether to output ALTO XMLs.")
     parser.add_argument("--output-embeddings", action="store_true", help="Whether to output embeddings.")
