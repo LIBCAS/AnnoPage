@@ -14,10 +14,35 @@ license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "doc-api@git+https://github.com/DCGM/DocAPI"
 ]
 
 [project.optional-dependencies]
+client = [
+    "doc-api@git+https://github.com/DCGM/DocAPI"
+]
+
+worker = [
+    "doc-api@git+https://github.com/DCGM/DocAPI"
+]
+
+tool = [
+    "Jinja2",
+    "lxml",
+    "numpy",
+    "opencv_python",
+    "opencv_python_headless",
+    "Pillow",
+    "pydantic",
+    "Requests",
+    "safe_gpu",
+    "sentence_transformers",
+    "shapely",
+    "torch",
+    "transformers",
+    "ultralytics",
+    "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@metadata_implementation#egg=pero_ocr",
+]
+
 full = [
     "Jinja2",
     "lxml",
@@ -34,6 +59,7 @@ full = [
     "transformers",
     "ultralytics",
     "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@metadata_implementation#egg=pero_ocr",
+    "doc-api@git+https://github.com/DCGM/DocAPI"
 ]
 
 [project.urls]
