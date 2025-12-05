@@ -188,7 +188,8 @@ def main():
         engines_dir=args.engines_dir,
         polling_interval=args.polling_interval,
         cleanup_job_dir=args.cleanup_job_dir,
-        cleanup_old_engines=args.cleanup_old_engines
+        cleanup_old_engines=args.cleanup_old_engines,
+        download_engine_using_stream=True
     )
     logger.debug("AnnoPageWorker initialized.")
 
