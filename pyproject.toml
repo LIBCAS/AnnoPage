@@ -73,5 +73,6 @@ repository = "https://github.com/LIBCAS/AnnoPage"
 
 [project.scripts]
 annopage = "anno_page.user_scripts.parse_folder:main"
+annopage_api = "anno_page.api.api:main"
 annopage_client = "anno_page.api.client:main"
 annopage_worker = "anno_page.api.worker:main"
