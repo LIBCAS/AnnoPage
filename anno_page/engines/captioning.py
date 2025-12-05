@@ -47,6 +47,7 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
                                                           description=caption_lines_text,
                                                           title=caption_lines_text)
 
+            linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
 
         return page_layout
@@ -95,6 +96,7 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
                                                                     description=caption_lines_text,
                                                                     title=caption_lines_text)
 
+                        linked_region.graphical_metadata.title = caption_lines_text
                         linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
 
         return page_layout
@@ -135,6 +137,7 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
                                                           description=caption_lines_text,
                                                           title=caption_lines_text)
 
+            linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
 
         return page_layout
@@ -278,7 +281,9 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
 
         page_metadata = page_layout.metadata.get("anno_page_metadata", None)
 
-        prompt = prompt_template.render(page_metadata if page_metadata else [], category=region.category)
+        prompt = prompt_template.render(page_metadata if page_metadata else [],
+                                        category=region.category,
+                                        title=region.graphical_metadata.title)
 
         return PromptData(
             image=image,
