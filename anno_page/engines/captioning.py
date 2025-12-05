@@ -267,8 +267,8 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
 
     def prepare_prompt_data(self, image, region, page_layout):
         if type(self.prompt_text) == dict:
-            if region.category in self.prompt_text:
-                prompt_template = Template(self.prompt_text[region.category])
+            if region.category.lower() in self.prompt_text:
+                prompt_template = Template(self.prompt_text[region.category.lower()])
             elif "default" in self.prompt_text:
                 prompt_template = Template(self.prompt_text["default"])
             else:
