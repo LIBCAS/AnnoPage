@@ -11,12 +11,19 @@ from doc_client.doc_client_wrapper import DocClientWrapper
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--images", type=str, help="Path to directory with images.")
-    parser.add_argument("--output", type=str, help="Path to the output dir.")
+
+    parser.add_argument("--api-url", type=str, help="URL of the API endpoint.", required=True)
+    parser.add_argument("--api-key", type=str, help="API key for authentication.", required=True)
+
+    group1 = parser.add_mutually_exclusive_group(required=True)
+    group1.add_argument("--list-engines", action="store_true", help="List available engines and exit.")
+
+    group1.add_argument("--images", type=str, help="Path to directory with images.")
+    parser.add_argument("--output", type=str, help="Path to the output dir.", required=False, default="./")
     parser.add_argument("--alto-xmls", type=str, help="Path to directory with ALTO XMLs.", required=False, default=None)
     parser.add_argument("--page-xmls", type=str, help="Path to directory with PAGE XMLs.", required=False, default=None)
-    parser.add_argument("--metadata", type=str, help="Path to the metadata JSON.")
-    parser.add_argument("--engine-name", type=str, help="Name of the processing engine to use.")
+    parser.add_argument("--metadata", type=str, help="Path to the metadata JSON.", required=False, default=None)
+    parser.add_argument("--engine-name", type=str, help="Name of the processing engine to use.", required=False, default=None)
 
     parser.add_argument("--output-alto", action="store_true", help="Whether to output ALTO XMLs.")
     parser.add_argument("--output-embeddings", action="store_true", help="Whether to output embeddings.")
@@ -26,13 +33,8 @@ def parse_args():
     parser.add_argument("--output-image-captioning-prompts", action="store_true", help="Whether to output image captioning prompts.")
     parser.add_argument("--image-captioning-settings", type=str, help="Path to image captioning settings JSON or JSON string.", required=False, default=None)
 
-    parser.add_argument("--api-url", type=str, help="URL of the API endpoint.")
-    parser.add_argument("--api-key", type=str, help="API key for authentication.")
-
-    parser.add_argument("--polling-interval", default=1.0, type=float, help="Time in seconds to wait between result checks.")
-    parser.add_argument("--logging-level", type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], default="INFO", help="Logging level.")
-
-    parser.add_argument("--list-engines", action="store_true", help="List available engines and exit.")
+    parser.add_argument("--polling-interval", help="Time in seconds to wait between result checks.", required=False, default=1.0, type=float)
+    parser.add_argument("--logging-level", help="Logging level.", required=False, type=str, choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], default="INFO")
 
     args = parser.parse_args()
     return args
