@@ -110,6 +110,19 @@ def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_ve
                                        confidence=region.detection_confidence,
                                        mods_namespace=mods_namespace)
 
+    for line in page_layout.lines_iterator([None, 'text']):
+        if line.graphical_metadata is not None:
+            tag_refs = set([metadata.tag_id for metadata in line.graphical_metadata])
+
+            text_line_element = print_space_element.find(f".//TextLine[@ID='{line.id}']", namespaces)
+            if text_line_element is not None:
+                current_tagrefs = text_line_element.attrib["TAGREFS"] if "TAGREFS" in text_line_element.attrib else None
+                if current_tagrefs:
+                    existing_tagrefs = set(current_tagrefs.split(' '))
+                    tag_refs = tag_refs.union(existing_tagrefs)
+
+                text_line_element.set("TAGREFS", ' '.join(tag_refs))
+
     return alto_root
 
 
