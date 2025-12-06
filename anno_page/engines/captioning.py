@@ -50,6 +50,12 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
             linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
 
+            for caption_line in caption_lines:
+                if caption_line.graphical_metadata is None:
+                    caption_line.graphical_metadata = [caption_lines_metadata]
+                else:
+                    caption_line.graphical_metadata.append(caption_lines_metadata)
+
         return page_layout
 
 
@@ -99,6 +105,12 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
                         linked_region.graphical_metadata.title = caption_lines_text
                         linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
 
+                        for caption_line in caption_lines:
+                            if caption_line.graphical_metadata is None:
+                                caption_line.graphical_metadata = [caption_lines_metadata]
+                            else:
+                                caption_line.graphical_metadata.append(caption_lines_metadata)
+
         return page_layout
 
 
@@ -139,6 +151,12 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
 
             linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
+
+            for caption_line in caption_lines:
+                if caption_line.graphical_metadata is None:
+                    caption_line.graphical_metadata = [caption_lines_metadata]
+                else:
+                    caption_line.graphical_metadata.append(caption_lines_metadata)
 
         return page_layout
 
