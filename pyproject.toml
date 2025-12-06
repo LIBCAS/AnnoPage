@@ -18,11 +18,11 @@ dependencies = [
 
 [project.optional-dependencies]
 client = [
-    "doc-api@git+https://github.com/DCGM/DocAPI"
+    "doc-api@git+https://github.com/DCGM/DocAPI@c411045d4e0426eb9cf253389c216e762e3d3f37"
 ]
 
 worker = [
-    "doc-api@git+https://github.com/DCGM/DocAPI"
+    "doc-api@git+https://github.com/DCGM/DocAPI@c411045d4e0426eb9cf253389c216e762e3d3f37"
 ]
 
 tool = [
@@ -40,7 +40,7 @@ tool = [
     "torch",
     "transformers",
     "ultralytics",
-    "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@metadata_implementation#egg=pero_ocr",
+    "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@512231deabf5b933e2979d3762b4c332e4954f51",
 ]
 
 full = [
@@ -58,8 +58,8 @@ full = [
     "torch",
     "transformers",
     "ultralytics",
-    "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@metadata_implementation#egg=pero_ocr",
-    "doc-api@git+https://github.com/DCGM/DocAPI"
+    "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@512231deabf5b933e2979d3762b4c332e4954f51",
+    "doc-api@git+https://github.com/DCGM/DocAPI@c411045d4e0426eb9cf253389c216e762e3d3f37"
 ]
 
 [project.urls]
