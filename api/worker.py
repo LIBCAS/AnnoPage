@@ -8,6 +8,7 @@ import subprocess
 import shutil
 
 from typing import Optional
+from logging.handlers import TimedRotatingFileHandler
 
 from anno_page.core.utils import compose_path
 
@@ -34,14 +35,17 @@ def parse_arguments():
     parser.add_argument("--cleanup-old-engines", action="store_true", help="Remove old engine versions when downloading new ones")
 
     parser.add_argument("--logging-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO", help="Logging level")
+    parser.add_argument("--logging-format", type=str, default="[%(levelname)s|%(asctime)s|%(filename)s:%(name)s]: %(message)s", help="Logging format string")
+    parser.add_argument("--logging-date-format", type=str, default="%Y-%m-%d_%H-%M-%S", help="Logging date format string")
+    parser.add_argument("--log-files-path", type=str, default=None, required=False, help="Path to a directory where log files will be stored")
 
     return parser.parse_args()
 
 
-def setup_logging(logging_level):
+def setup_logging(logging_level, logging_format="", logging_date_format=None, log_files_path=None):
     level = logging.getLevelName(logging_level)
 
-    console_log_formatter = logging.Formatter('[%(levelname)s|%(asctime)s|%(filename)s:%(name)s]: %(message)s', datefmt="%Y-%m-%d_%H-%M-%S")
+    console_log_formatter = logging.Formatter(logging_format, datefmt=logging_date_format)
 
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
@@ -50,8 +54,16 @@ def setup_logging(logging_level):
         console_handler = logging.StreamHandler()
         root_logger.addHandler(console_handler)
 
-    root_handler = root_logger.handlers[0]
-    root_handler.setFormatter(console_log_formatter)
+    if log_files_path is not None:
+        time_rotating_file_handler = TimedRotatingFileHandler(
+            filename=log_files_path,
+            when="M",
+            utc=True)
+
+        root_logger.addHandler(time_rotating_file_handler)
+
+    for root_handler in root_logger.handlers:
+        root_handler.setFormatter(console_log_formatter)
 
 
 class AnnoPageWorker(DocWorkerWrapper):
@@ -174,8 +186,11 @@ class AnnoPageWorker(DocWorkerWrapper):
 
 def main():
     args = parse_arguments()
-    
-    setup_logging(args.logging_level)
+
+    setup_logging(args.logging_level,
+                  logging_format=args.logging_format,
+                  logging_date_format=args.logging_date_format,
+                  log_files_path=args.log_files_path)
 
     connector = Connector(args.api_key, user_agent="AnnoPageWorker/1.0")
     logger.debug("Connector initialized.")
