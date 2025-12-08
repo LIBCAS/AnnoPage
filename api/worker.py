@@ -67,8 +67,6 @@ def setup_logging(logging_level, logging_format="", logging_date_format=None, lo
 
 
 class AnnoPageWorker(DocWorkerWrapper):
-    processing_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../user_scripts/parse_folder.py")
-
     def process_job(self,
                     job: Job,
                     job_log_file_handler: logging.FileHandler,
@@ -90,7 +88,7 @@ class AnnoPageWorker(DocWorkerWrapper):
 
         process_env = os.environ.copy()
         process_params = [
-            "python", self.processing_script,
+            "annopage",
             "--config", config_path,
             "--input-image-path", images_dir,
             "--logging-level", logging.getLevelName(logger.getEffectiveLevel())
