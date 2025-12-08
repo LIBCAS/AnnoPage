@@ -57,7 +57,7 @@ def setup_logging(logging_level, logging_format="", logging_date_format=None, lo
     if log_files_path is not None:
         time_rotating_file_handler = TimedRotatingFileHandler(
             filename=log_files_path,
-            when="M",
+            when="midnight",
             utc=True)
 
         root_logger.addHandler(time_rotating_file_handler)
