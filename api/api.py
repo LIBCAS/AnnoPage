@@ -1,7 +1,8 @@
 import os
-from doc_api.run import main
+from doc_api.run import main as doc_api_main
 
-if __name__ == "__main__":
+
+def main():
     config = {
         "SERVER_NAME": "AnnoPageAPI",
         "APP_VERSION": "1.0.0",
@@ -16,4 +17,8 @@ if __name__ == "__main__":
         if not os.environ.get(key, None):
             os.environ[key] = value
 
-    main()
+    doc_api_main()
+
+
+if __name__ == "__main__":
+    exit(main())
