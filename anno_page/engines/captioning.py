@@ -167,6 +167,9 @@ class CaptionOrganizer:
         self.device = device
         self.categories = categories
 
+        if self.device.type == 'cpu':
+            self.model_path += ".cpu"
+
         self.model = torch.jit.load(self.model_path).to(self.device)
 
     def assign_captions_to_regions(self, regions, captions, page_image):
