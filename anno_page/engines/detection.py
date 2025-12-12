@@ -24,7 +24,7 @@ class YoloDetectionEngine(LayoutProcessingEngine):
     def process_page(self, page_image, page_layout):
         results = self.detector(page_image)
 
-        boxes = results[0].boxes.data.cpu()
+        boxes = results.boxes.data.cpu()
         for box in boxes:
             x_min, y_min, x_max, y_max, conf, class_id = box.tolist()
             category = self.detector.names[int(class_id)]
