@@ -124,7 +124,7 @@ ENV/
 
 *.swo
 
-*.pdf
+#*.pdf
 
 *.pick
 
