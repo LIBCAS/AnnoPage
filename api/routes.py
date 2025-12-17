@@ -10,6 +10,7 @@ from doc_api.db import model
 
 from anno_page.engines.translation import TranslationEngine
 from anno_page.engines.embedding import ClipTextEmbeddingEngine
+from anno_page.engines.captioning import PromptBuilderEngine
 
 
 def dict_to_config_section(data: dict):
@@ -35,6 +36,8 @@ text_embedding_engine_config = dict_to_config_section(data={
 text_embedding_engine = ClipTextEmbeddingEngine(config=text_embedding_engine_config,
                                                  device="cpu",
                                                  config_path="")
+
+prompt_builder_engine = PromptBuilderEngine()
 
 
 @root_router.get(
@@ -64,3 +67,23 @@ async def text_embedding(
         key: model.Key = Depends(require_api_key(base_objects.KeyRole.READONLY, base_objects.KeyRole.USER))):
     embeddings = text_embedding_engine.process(text)[0]
     return embeddings
+
+
+@root_router.post(
+    "/v1/prompt/evaluation",
+    summary="Prompt Evaluation",
+    tags=["User"],
+    openapi_extra={"x-order": 668},
+    description="Evaluate prompt for image captioning.",
+    status_code=fastapi.status.HTTP_200_OK)
+async def prompt_evaluation(
+        prompt: str|dict[str, str],
+        category: Optional[str] = None,
+        title: Optional[str] = None,
+        metadata: Optional[dict[str, str]] = None,
+        key: model.Key = Depends(require_api_key(base_objects.KeyRole.READONLY, base_objects.KeyRole.USER))):
+    output = prompt_builder_engine.process(prompt=prompt,
+                                           category=category,
+                                           title=title,
+                                           metadata=metadata)
+    return output
