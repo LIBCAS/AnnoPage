@@ -62,7 +62,5 @@ async def text_translation(
 async def text_embedding(
         text: str,
         key: model.Key = Depends(require_api_key(base_objects.KeyRole.READONLY, base_objects.KeyRole.USER))):
-
     embeddings = text_embedding_engine.process(text)[0]
     return embeddings
-
