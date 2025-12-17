@@ -11,7 +11,7 @@ from multiprocessing import Pool
 
 from anno_page.core.utils import compose_path, config_get_list
 from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata
-from anno_page.engines import LayoutProcessingEngine
+from anno_page.engines import BaseEngine, LayoutProcessingEngine
 from anno_page.engines.detection import YoloDetector
 from anno_page.enums import Language, LineRelation
 from anno_page.engines.helpers import find_nearest_region, find_lines_in_bbox
@@ -243,6 +243,8 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
         self.prompt_text = prompt_settings["text"]
         self.prompt_max_tokens = prompt_settings.get("max_tokens", 500)
 
+        self.prompt_builder = PromptBuilderEngine()
+
     def process_page(self, page_image, page_layout):
         data = []
 
@@ -290,21 +292,11 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
         return image
 
     def prepare_prompt_data(self, image, region, page_layout):
-        if type(self.prompt_text) == dict:
-            if region.category.lower() in self.prompt_text:
-                prompt_template = Template(self.prompt_text[region.category.lower()])
-            elif "default" in self.prompt_text:
-                prompt_template = Template(self.prompt_text["default"])
-            else:
-                raise ValueError(f"No prompt template found for category '{region.category}' and no default template provided.")
-        else:
-            prompt_template = Template(self.prompt_text)
-
         page_metadata = page_layout.metadata.get("anno_page_metadata", None)
-
-        prompt = prompt_template.render(page_metadata if page_metadata else [],
-                                        category=region.category,
-                                        title=region.graphical_metadata.title)
+        prompt = self.prompt_builder.process(prompt=self.prompt_text,
+                                             category=region.category,
+                                             title=region.graphical_metadata.title,
+                                             metadata=page_metadata if page_metadata else [])
 
         return PromptData(
             image=image,
@@ -421,3 +413,25 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
         image_base64 = base64.b64encode(image_jpg).decode('utf-8')
         return image_base64
 
+
+class PromptBuilderEngine(BaseEngine):
+    def __init__(self):
+        super().__init__(config=None, device=None, config_path=None)
+
+    @staticmethod
+    def process(prompt: str|dict[str, str], category=None, title=None, metadata=None) -> str:
+        if type(prompt) == dict:
+            if category is not None and category.lower() in prompt:
+                prompt_template = Template(prompt[category.lower()])
+            elif "default" in prompt:
+                prompt_template = Template(prompt["default"])
+            else:
+                raise ValueError(f"No prompt template found for category '{category}' and no default template provided.")
+        else:
+            prompt_template = Template(prompt)
+
+        prompt_output = prompt_template.render(metadata if metadata else [],
+                                               category=category,
+                                               title=title)
+
+        return prompt_output
