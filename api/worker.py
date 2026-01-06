@@ -26,7 +26,7 @@ def parse_arguments():
     parser.add_argument("--api-url", type=str, help="URL of the API endpoint.")
     parser.add_argument("--api-key", type=str, help="API key for authentication.")
 
-    parser.add_argument("--base-dir", help="Base directory for jobs and engines (creates subdirectories 'jobs' and 'engines')", default="worker_data")
+    parser.add_argument("--base-dir", help="Base directory for jobs and engines (creates subdirectories 'jobs' and 'engines')", default="annopage_worker_data")
     parser.add_argument("--jobs-dir", help="Directory for job data (overrides base-dir/jobs)")
     parser.add_argument("--engines-dir", help="Directory for engine files (overrides base-dir/engines)")
 
