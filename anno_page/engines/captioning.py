@@ -6,6 +6,7 @@ import base64
 import requests
 import numpy as np
 
+from abc import abstractmethod
 from jinja2 import Template
 from multiprocessing import Pool
 
@@ -220,30 +221,50 @@ class PromptData:
         self.result = result
 
 
-class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
+class PromptBuilderEngine(BaseEngine):
+    def __init__(self):
+        super().__init__(config=None, device=None, config_path=None)
+
+    @staticmethod
+    def process(prompt: str|dict[str, str], category=None, title=None, metadata=None) -> str:
+        if type(prompt) == dict:
+            if category is not None and category.lower() in prompt:
+                prompt_template = Template(prompt[category.lower()])
+            elif "default" in prompt:
+                prompt_template = Template(prompt["default"])
+            else:
+                raise ValueError(f"No prompt template found for category '{category}' and no default template provided.")
+        else:
+            prompt_template = Template(prompt)
+
+        prompt_output = prompt_template.render(metadata if metadata else [],
+                                               category=category,
+                                               title=title)
+
+        return prompt_output
+
+
+class BaseImageCaptioningEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path)
 
-        self.api_key = self.config["api_key"]
         self.max_image_size = self.config.getint('max_image_size', fallback=None)
         self.categories = config_get_list(self.config, key="categories", fallback=None)
+        self.prompt_settings_path = compose_path(self.config["prompt_settings"], self.config_path)
         self.num_processes = self.config.getint('num_processes', fallback=1)
-        self.prompt_settings = compose_path(self.config["prompt_settings"], self.config_path)
         self.max_attempts = self.config.getint('max_attempts', fallback=3)
 
-        api_key_path = compose_path(self.api_key, self.config_path)
-        if os.path.exists(api_key_path):
-            with open(api_key_path, 'r') as f:
-                self.api_key = f.read().strip()
+        with open(self.prompt_settings_path, 'r') as f:
+            self.prompt_settings = json.load(f)
 
-        with open(self.prompt_settings, 'r') as f:
-            prompt_settings = json.load(f)
-
-        self.prompt_model = prompt_settings.get("model", "gpt-4o-mini")
-        self.prompt_text = prompt_settings["text"]
-        self.prompt_max_tokens = prompt_settings.get("max_tokens", 500)
+        self.prompt_model = self.prompt_settings["model"]
+        self.prompt_text = self.prompt_settings["text"]
 
         self.prompt_builder = PromptBuilderEngine()
+
+    @abstractmethod
+    def generate_image_caption(self, prompt_data: PromptData):
+        pass
 
     def process_page(self, page_image, page_layout):
         data = []
@@ -319,46 +340,6 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
                 image_caption = self.generate_image_caption(item)
                 item.result = image_caption
 
-    def generate_image_caption(self, item: PromptData):
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        }
-
-        self.logger.debug(f"Generating caption for region {item.region.id} with prompt: {item.prompt}")
-
-        payload = {
-            "model": self.prompt_model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": item.prompt
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{self.encode_image(item.image)}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            "max_tokens": self.prompt_max_tokens
-        }
-
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-
-        try:
-            image_caption = response.json()["choices"][0]["message"]["content"]
-            self.logger.info(f"Successfully generated caption for region {item.region.id}: {image_caption}")
-        except:
-            image_caption = None
-            self.logger.warning(f"Failed to get caption from API for region {item.region.id}: {response.text}")
-
-        return image_caption
 
     def process_image_captions(self, data: list[PromptData]):
         for item in data:
@@ -414,24 +395,83 @@ class ChatGPTImageCaptioningEngine(LayoutProcessingEngine):
         return image_base64
 
 
-class PromptBuilderEngine(BaseEngine):
-    def __init__(self):
-        super().__init__(config=None, device=None, config_path=None)
+class OllamaImageCaptioningEngine(BaseImageCaptioningEngine):
+    def __init__(self, config, device, config_path):
+        super().__init__(config, device, config_path)
 
-    @staticmethod
-    def process(prompt: str|dict[str, str], category=None, title=None, metadata=None) -> str:
-        if type(prompt) == dict:
-            if category is not None and category.lower() in prompt:
-                prompt_template = Template(prompt[category.lower()])
-            elif "default" in prompt:
-                prompt_template = Template(prompt["default"])
-            else:
-                raise ValueError(f"No prompt template found for category '{category}' and no default template provided.")
-        else:
-            prompt_template = Template(prompt)
+        self.api_url = self.config.get("api_url", "http://localhost:11434")
 
-        prompt_output = prompt_template.render(metadata if metadata else [],
-                                               category=category,
-                                               title=title)
+    def generate_image_caption(self, prompt_data: PromptData):
+        self.logger.debug(f"Generating caption for region {prompt_data.region.id} using {self.prompt_model} with prompt: {prompt_data.prompt}")
 
-        return prompt_output
+        payload = {
+            "model": self.prompt_model,
+            "prompt": prompt_data.prompt,
+            "images": [self.encode_image(prompt_data.image)],
+            "stream": False
+        }
+
+        response = requests.post(self.api_url, json=payload)
+
+        try:
+            image_caption = response.json()["response"]
+            self.logger.info(f"Successfully generated caption for region {prompt_data.region.id}: {image_caption}")
+        except:
+            image_caption = None
+            self.logger.warning(f"Failed to get caption from API for region {prompt_data.region.id}: {response.text}")
+
+        return image_caption
+
+
+class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
+    def __init__(self, config, device, config_path):
+        super().__init__(config, device, config_path)
+
+        self.api_key = self.config["api_key"]
+        api_key_path = compose_path(self.api_key, self.config_path)
+        if os.path.exists(api_key_path):
+            with open(api_key_path, 'r') as f:
+                self.api_key = f.read().strip()
+
+        self.prompt_max_tokens = self.prompt_settings.get("max_tokens", 500)
+
+    def generate_image_caption(self, prompt_data: PromptData):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+
+        self.logger.debug(f"Generating caption for region {prompt_data.region.id} using {self.prompt_model} with prompt: {prompt_data.prompt}")
+
+        payload = {
+            "model": self.prompt_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt_data.prompt
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{self.encode_image(prompt_data.image)}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            "max_tokens": self.prompt_max_tokens
+        }
+
+        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+
+        try:
+            image_caption = response.json()["choices"][0]["message"]["content"]
+            self.logger.info(f"Successfully generated caption for region {prompt_data.region.id}: {image_caption}")
+        except:
+            image_caption = None
+            self.logger.warning(f"Failed to get caption from API for region {prompt_data.region.id}: {response.text}")
+
+        return image_caption
