@@ -3,8 +3,8 @@ import torch
 import logging
 
 from anno_page.engines import (LayoutProcessingEngine, YoloDetectionEngine, ClipImageEmbeddingEngine,
-                               ChatGPTImageCaptioningEngine, CaptionYoloNearestEngine, CaptionYoloKeypointsEngine,
-                               CaptionYoloOrganizerEngine)
+                               ChatGPTImageCaptioningEngine, OllamaImageCaptioningEngine, CaptionYoloNearestEngine,
+                               CaptionYoloKeypointsEngine, CaptionYoloOrganizerEngine)
 
 
 def operation_factory(config, device, config_path) -> LayoutProcessingEngine | None:
@@ -24,6 +24,9 @@ def operation_factory(config, device, config_path) -> LayoutProcessingEngine | N
     elif config['METHOD'] == 'GPT_IMAGE_CAPTIONING':
         logger.info("Creating ChatGPTImageCaptioning engine")
         engine = ChatGPTImageCaptioningEngine(config, device, config_path=config_path)
+    elif config['METHOD'] == 'OLLAMA_IMAGE_CAPTIONING':
+        logger.info("Creating OllamaImageCaptioning engine")
+        engine = OllamaImageCaptioningEngine(config, device, config_path=config_path)
     elif config['METHOD'] == 'CAPTION_YOLO_NEAREST':
         logger.info("Creating CaptionYoloNearestEngine engine")
         engine = CaptionYoloNearestEngine(config, device, config_path=config_path)
