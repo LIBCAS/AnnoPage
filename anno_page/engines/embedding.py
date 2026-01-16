@@ -1,28 +1,29 @@
 import uuid
+import torch
 
 from PIL import Image
 from datetime import datetime
-from sentence_transformers import SentenceTransformer
+from transformers import AutoModel, AutoProcessor
 
 from anno_page import globals
 from anno_page.core.utils import config_get_list
 from anno_page.engines import BaseEngine, LayoutProcessingEngine
-from anno_page.engines.helpers import set_model_dtype
+from anno_page.engines.helpers import config_get_dtype
 from anno_page.enums import Category, Language
 from anno_page.core.embedding import ObjectEmbedding, ProcessingInfo
 
 
-class ClipImageEmbeddingEngine(LayoutProcessingEngine):
+class HuggingfaceImageEmbeddingEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path)
 
         self.model_name = self.config["MODEL"]
         self.decimal_places = self.config.getint("DECIMAL_PLACES", None)
-        self.precision = self.config.get("PRECISION", "float16")
+        self.precision = config_get_dtype(self.config, key="PRECISION", fallback=torch.float16)
         self.categories = config_get_list(self.config, key="categories", fallback=None)
 
-        self.model = SentenceTransformer(self.model_name, device=self.device)
-        self.model = set_model_dtype(self.model, self.precision)
+        self.model = AutoModel.from_pretrained(self.model_name, torch_dtype=self.precision).to(self.device).eval()
+        self.processor = AutoProcessor.from_pretrained(self.model_name)
 
     def process_page(self, page_image, page_layout):
         for region in page_layout.regions:
@@ -35,7 +36,9 @@ class ClipImageEmbeddingEngine(LayoutProcessingEngine):
 
                 object_uuid = region.graphical_metadata.mods_uuid if region.graphical_metadata is not None else uuid.uuid4()
 
-                region_embedding = self.model.encode(Image.fromarray(region_image), show_progress_bar=False).tolist()
+                image_inputs = self.processor(images=Image.fromarray(region_image), return_tensors="pt").to(self.device)
+                with torch.no_grad():
+                    region_embedding = self.model.get_image_features(**image_inputs).float().cpu().numpy()[0].tolist()
 
                 if self.decimal_places is not None:
                     region_embedding = [round(value, self.decimal_places) for value in region_embedding]
@@ -54,7 +57,7 @@ class ClipImageEmbeddingEngine(LayoutProcessingEngine):
                         datetime=datetime.now().isoformat(),
                         model=self.model_name,
                         decimal_places=self.decimal_places,
-                        precision=self.precision
+                        precision=str(self.precision)
                     )
                 )
 
@@ -63,22 +66,24 @@ class ClipImageEmbeddingEngine(LayoutProcessingEngine):
         return page_layout
 
 
-class ClipTextEmbeddingEngine(BaseEngine):
+class HuggingfaceTextEmbeddingEngine(BaseEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path)
 
         self.model_name = self.config["MODEL"]
         self.decimal_places = self.config.getint("DECIMAL_PLACES", None)
-        self.precision = self.config.get("PRECISION", "float16")
+        self.precision = config_get_dtype(self.config, key="PRECISION", fallback=torch.float16)
 
-        self.model = SentenceTransformer(self.model_name, device=self.device)
-        self.model = set_model_dtype(self.model, self.precision)
+        self.model = AutoModel.from_pretrained(self.model_name, torch_dtype=self.precision).to(self.device).eval()
+        self.processor = AutoProcessor.from_pretrained(self.model_name)
 
     def process(self, data: str | list[str]) -> list[ObjectEmbedding]:
         if isinstance(data, str):
             data = [data]
 
-        embeddings = self.model.encode(data, show_progress_bar=False).tolist()
+        text_inputs = self.processor(text=data, return_tensors="pt", padding=True, truncation=True).to(self.device)
+        with torch.no_grad():
+            embeddings = self.model.get_text_features(**text_inputs).float().cpu().numpy().tolist()
 
         if self.decimal_places is not None:
             embeddings = [[round(value, self.decimal_places) for value in embedding] for embedding in embeddings]
@@ -98,7 +103,7 @@ class ClipTextEmbeddingEngine(BaseEngine):
                     datetime=datetime.now().isoformat(),
                     model=self.model_name,
                     decimal_places=self.decimal_places,
-                    precision=self.precision
+                    precision=str(self.precision)
                 )
             ))
 
