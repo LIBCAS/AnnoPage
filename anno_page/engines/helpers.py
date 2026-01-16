@@ -14,14 +14,14 @@ DTYPE_MAPPING = {
 }
 
 
-def set_model_dtype(model, dtype_str: str):
-    try:
-        torch_dtype = DTYPE_MAPPING[dtype_str.lower()]
-    except KeyError:
-        raise ValueError(f"Unsupported dtype string: '{dtype_str}'. Use one of: {list(DTYPE_MAPPING.keys())}")
+def config_get_dtype(config, key, fallback=torch.float32):
+    dtype_str = config.get(key, None)
+    if dtype_str is not None:
+        dtype = DTYPE_MAPPING.get(dtype_str.lower(), None)
+        if dtype is not None:
+            return dtype
 
-    model.to(dtype=torch_dtype)
-    return model
+    return fallback
 
 
 def find_lines_in_bbox(bbox, page_layout, threshold=0.5):
