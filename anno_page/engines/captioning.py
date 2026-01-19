@@ -433,7 +433,7 @@ class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
             with open(api_key_path, 'r') as f:
                 self.api_key = f.read().strip()
 
-        self.prompt_max_tokens = self.prompt_settings.get("max_tokens", 500)
+        self.prompt_max_tokens = self.prompt_settings.get("max_tokens", None)
 
     def generate_image_caption(self, prompt_data: PromptData):
         headers = {
@@ -461,9 +461,11 @@ class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
                         }
                     ]
                 }
-            ],
-            "max_tokens": self.prompt_max_tokens
+            ]
         }
+
+        if self.prompt_max_tokens is not None:
+            payload["max_tokens"] = self.prompt_max_tokens
 
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
 
