@@ -258,7 +258,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
             self.prompt_settings = json.load(f)
 
         self.prompt_model = self.prompt_settings["model"]
-        self.prompt_text = self.prompt_settings["text"]
+        self.prompt_text = self._normalize_category_names(self.prompt_settings["text"])
 
         self.prompt_builder = PromptBuilderEngine()
 
