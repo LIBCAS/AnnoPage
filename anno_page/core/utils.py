@@ -21,6 +21,10 @@ def config_get_list(config, key, fallback=None, make_lowercase=False):
         logger.info(f'Failed to parse list from config key "{key}", returning fallback {fallback}:\n{e}')
         return fallback
 
+    if not isinstance(value, list):
+        logger.info(f'Config key "{key}" is not a list (got {type(value).__name__}), returning fallback {fallback}.')
+        return fallback
+
     if make_lowercase:
         value = [str(item).lower() if isinstance(item, str) else item for item in value]
 
