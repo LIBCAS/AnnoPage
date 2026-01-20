@@ -20,14 +20,17 @@ class HuggingfaceImageEmbeddingEngine(LayoutProcessingEngine):
         self.model_name = self.config["MODEL"]
         self.decimal_places = self.config.getint("DECIMAL_PLACES", None)
         self.precision = config_get_dtype(self.config, key="PRECISION", fallback=torch.float16)
-        self.categories = config_get_list(self.config, key="categories", fallback=None)
+        self.categories = config_get_list(self.config, key="categories", fallback=None, make_lowercase=True)
 
         self.model = AutoModel.from_pretrained(self.model_name, torch_dtype=self.precision).to(self.device).eval()
         self.processor = AutoProcessor.from_pretrained(self.model_name)
 
     def process_page(self, page_image, page_layout):
         for region in page_layout.regions:
-            if (self.categories is None and region.category not in (None, 'text')) or (self.categories is not None and region.category in self.categories):
+            if region.category is None or region.category.lower() == "text":
+                continue
+
+            if self.categories is None or region.category.lower() in self.categories:
                 x_min, y_min, x_max, y_max = region.get_polygon_bounding_box()
                 region_image = page_image[y_min:y_max, x_min:x_max]
 

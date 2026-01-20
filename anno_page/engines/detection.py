@@ -19,7 +19,7 @@ class YoloDetectionEngine(LayoutProcessingEngine):
                                      detection_threshold=self.config.getfloat("DETECTION_THRESHOLD", 0.2),
                                      image_size=self.config.getint("IMAGE_SIZE", 640))
 
-        self.categories = config_get_list(self.config, key="categories", fallback=None)
+        self.categories = config_get_list(self.config, key="categories", fallback=None, make_lowercase=True)
 
     def process_page(self, page_image, page_layout):
         results = self.detector(page_image)
@@ -29,7 +29,7 @@ class YoloDetectionEngine(LayoutProcessingEngine):
             x_min, y_min, x_max, y_max, conf, class_id = box.tolist()
             category = self.detector.names[int(class_id)]
 
-            if self.categories is None or self.categories is not None and category in self.categories:
+            if self.categories is None or self.categories is not None and category.lower() in self.categories:
                 category_name = Category.from_string(category).to_string(Language.MODS_GENRE_EN)
                 region_id = self.get_next_region_id(page_layout, category, prefix=category_name)
                 polygon = np.array([[x_min, y_min], [x_min, y_max], [x_max, y_max], [x_max, y_min], [x_min, y_min]])
