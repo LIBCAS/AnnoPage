@@ -249,7 +249,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         super().__init__(config, device, config_path)
 
         self.max_image_size = self.config.getint('max_image_size', fallback=None)
-        self.categories = config_get_list(self.config, key="categories", fallback=None)
+        self.categories = config_get_list(self.config, key="categories", fallback=None, make_lowercase=True)
         self.prompt_settings_path = compose_path(self.config["prompt_settings"], self.config_path)
         self.num_processes = self.config.getint('num_processes', fallback=1)
         self.max_attempts = self.config.getint('max_attempts', fallback=3)
@@ -270,7 +270,10 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         data = []
 
         for region in page_layout.regions:
-            if (self.categories is None and region.category not in (None, 'text')) or (self.categories is not None and region.category in self.categories):
+            if region.category is None or region.category.lower() == "text":
+                continue
+
+            if self.categories is None or region.category.lower() in self.categories:
                 image = self.crop_region_image(page_image, region)
 
                 if image.size == 0:
@@ -433,7 +436,7 @@ class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
             with open(api_key_path, 'r') as f:
                 self.api_key = f.read().strip()
 
-        self.prompt_max_tokens = self.prompt_settings.get("max_tokens", 500)
+        self.prompt_max_tokens = self.prompt_settings.get("max_tokens", None)
 
     def generate_image_caption(self, prompt_data: PromptData):
         headers = {
@@ -461,9 +464,11 @@ class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
                         }
                     ]
                 }
-            ],
-            "max_tokens": self.prompt_max_tokens
+            ]
         }
+
+        if self.prompt_max_tokens is not None:
+            payload["max_tokens"] = self.prompt_max_tokens
 
         response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
 
