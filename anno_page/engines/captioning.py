@@ -266,6 +266,17 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
     def generate_image_caption(self, prompt_data: PromptData):
         pass
 
+    @staticmethod
+    def _normalize_category_names(prompt_text):
+        if type(prompt_text) == dict:
+            normalized_prompt = {}
+            for category, text in prompt_text.items():
+                normalized_category = category.lower()
+                normalized_prompt[normalized_category] = text
+            return normalized_prompt
+        else:
+            return prompt_text
+
     def process_page(self, page_image, page_layout):
         data = []
 
