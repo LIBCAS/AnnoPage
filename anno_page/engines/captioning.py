@@ -354,6 +354,11 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
                 item.result = None
                 continue
 
+            if not isinstance(image_caption_json, dict):
+                self.logger.warning(f"Invalid image caption JSON format for region {item.region.id}: {item.result}")
+                item.result = None
+                continue
+
             if len(image_caption_json) == 0:
                 self.logger.warning(f"Empty image caption JSON for region {item.region.id}: {item.result}")
                 item.result = None
