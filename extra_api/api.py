@@ -195,7 +195,7 @@ app.include_router(api_router, prefix="/v1")
 
 
 def main():
-    uvicorn.run("annopage.extra_api.api:app",
+    uvicorn.run("anno_page.extra_api.api:app",
                 host="127.0.0.1",
                 port=8666,
                 reload=False)
