@@ -1,5 +1,6 @@
 import uuid
 import torch
+import transformers
 
 from PIL import Image
 from datetime import datetime
@@ -41,7 +42,12 @@ class HuggingfaceImageEmbeddingEngine(LayoutProcessingEngine):
 
                 image_inputs = self.processor(images=Image.fromarray(region_image), return_tensors="pt").to(self.device)
                 with torch.no_grad():
-                    region_embedding = self.model.get_image_features(**image_inputs).float().cpu().numpy()[0].tolist()
+                    region_embedding = self.model.get_image_features(**image_inputs)
+
+                    if isinstance(region_embedding, transformers.modeling_outputs.BaseModelOutputWithPooling):
+                        region_embedding = region_embedding.pooler_output
+
+                    region_embedding = region_embedding.float().cpu().numpy()[0].tolist()
 
                 if self.decimal_places is not None:
                     region_embedding = [round(value, self.decimal_places) for value in region_embedding]
