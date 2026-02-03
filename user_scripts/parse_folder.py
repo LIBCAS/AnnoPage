@@ -185,6 +185,17 @@ class Computator:
                 else:
                     self.logger.warning(f"PAGE XML file does not exist: '{xml_file_path}'.")
 
+            if page_layout.page_size is not None and image is not None:
+                image_height = image.shape[0]
+                image_width = image.shape[1]
+
+                page_height = page_layout.page_size[0]
+                page_width = page_layout.page_size[1]
+
+                if page_height != image_height or page_width != image_width:
+                    image = cv2.resize(image, (page_width, page_height))
+                    self.logger.info(f"Resized image to page size: ({page_width}, {page_height}).")
+
             page_layout.metadata["anno_page_metadata"] = file_metadata
             page_layout = self.page_parser.process_page(image, page_layout)
 
