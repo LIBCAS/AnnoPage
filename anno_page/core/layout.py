@@ -7,6 +7,7 @@ from pero_ocr.core.layout import RegionLayout, PageLayout, create_ocr_processing
 
 from anno_page import globals
 from anno_page.enums import Category
+from anno_page.core.utils import find_textline_by_geometry_and_content
 
 
 def region_to_altoxml(region: RegionLayout, page_content_element):
@@ -115,6 +116,9 @@ def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_ve
             tag_refs = set([metadata.tag_id for metadata in line.graphical_metadata])
 
             text_line_element = print_space_element.find(f".//TextLine[@ID='{line.id}']", namespaces)
+            if text_line_element is None:
+                text_line_element = find_textline_by_geometry_and_content(print_space_element, line, namespaces)
+
             if text_line_element is not None:
                 current_tagrefs = text_line_element.attrib["TAGREFS"] if "TAGREFS" in text_line_element.attrib else None
                 if current_tagrefs:
