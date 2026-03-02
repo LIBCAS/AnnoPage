@@ -175,8 +175,8 @@ async def prompt_evaluation(
         loaded_engines: LoadedEngines = Depends(get_loaded_engines)):
     if loaded_engines.prompt_builder_engine is not None:
         result = loaded_engines.prompt_builder_engine.process(prompt=data.prompt,
-                                                              category=data.category,
-                                                              title=data.title,
+                                                              element_category=data.category,
+                                                              element_caption=data.title,
                                                               metadata=data.metadata)
     else:
         result = fastapi.HTTPException(status_code=fastapi.status.HTTP_503_SERVICE_UNAVAILABLE,

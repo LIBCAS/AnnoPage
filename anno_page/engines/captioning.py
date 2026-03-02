@@ -226,20 +226,20 @@ class PromptBuilderEngine(BaseEngine):
         super().__init__(config=None, device=None, config_path=None)
 
     @staticmethod
-    def process(prompt: str|dict[str, str], category=None, title=None, metadata=None) -> str:
+    def process(prompt: str|dict[str, str], element_category=None, element_caption=None, metadata=None) -> str:
         if type(prompt) == dict:
-            if category is not None and category.lower() in prompt:
-                prompt_template = Template(prompt[category.lower()])
+            if element_category is not None and element_category.lower() in prompt:
+                prompt_template = Template(prompt[element_category.lower()])
             elif "default" in prompt:
                 prompt_template = Template(prompt["default"])
             else:
-                raise ValueError(f"No prompt template found for category '{category}' and no default template provided.")
+                raise ValueError(f"No prompt template found for category '{element_category}' and no default template provided.")
         else:
             prompt_template = Template(prompt)
 
         prompt_output = prompt_template.render(metadata if metadata else [],
-                                               category=category,
-                                               title=title)
+                                               element_category=element_category,
+                                               element_caption=element_caption)
 
         return prompt_output
 
@@ -329,8 +329,8 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
     def prepare_prompt_data(self, image, region, page_layout):
         page_metadata = page_layout.metadata.get("anno_page_metadata", None)
         prompt = self.prompt_builder.process(prompt=self.prompt_text,
-                                             category=region.category,
-                                             title=region.graphical_metadata.title,
+                                             element_category=region.category,
+                                             element_caption=region.graphical_metadata.title,
                                              metadata=page_metadata if page_metadata else [])
 
         return PromptData(
