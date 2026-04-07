@@ -446,6 +446,8 @@ class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path)
 
+        self.api_url = self.config.get("api_url", "https://api.openai.com/v1/chat/completions")
+
         self.api_key = self.config["api_key"]
         api_key_path = compose_path(self.api_key, self.config_path)
         if os.path.exists(api_key_path):
@@ -486,7 +488,7 @@ class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
         if self.prompt_max_tokens is not None:
             payload["max_tokens"] = self.prompt_max_tokens
 
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+        response = requests.post(self.api_url, headers=headers, json=payload)
 
         try:
             image_caption = response.json()["choices"][0]["message"]["content"]
