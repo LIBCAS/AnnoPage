@@ -8,6 +8,7 @@ from pero_ocr.core.layout import TextLine
 
 from anno_page import globals
 from anno_page.enums import Category, Language, LineRelation
+from anno_page.enums.language import language_to_string_mapping, language_to_string_mapping_reversed
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,13 @@ class BaseMetadata:
     def to_altoxml(self, *args, **kwargs):
         raise NotImplementedError
 
+    def to_dict(self) -> dict:
+        return {
+            "tag_id": self.tag_id,
+            "mods_id": self.mods_id,
+            "mods_uuid": str(self.mods_uuid)
+        }
+
 
 class RelatedLinesMetadata(BaseMetadata):
     def __init__(self,
@@ -172,6 +180,20 @@ class RelatedLinesMetadata(BaseMetadata):
             self._add_related_item_element(mods, mods_namespace, values["related_item_type"], related_mods_id)
 
         self._add_record_info_element(mods, mods_namespace, confidence=confidence)
+
+    def to_dict(self) -> dict:
+        result = super().to_dict()
+
+        title = {language_to_string_mapping[k]: v for k, v in self.title.items()} if isinstance(self.title, dict) else self.title
+
+        result.update({
+            "lines": [line.id for line in self.lines],
+            "relation": self.relation.value,
+            "description": self.description,
+            "title": title
+        })
+
+        return result
 
     def update(self, other):
         if other is None:
@@ -403,3 +425,24 @@ class GraphicalObjectMetadata(BaseMetadata):
 
         if language is not None:
             abstract.attrib["lang"] = language
+
+    def to_dict(self) -> dict:
+        result = super().to_dict()
+
+        description = {language_to_string_mapping[k]: v for k, v in self.description.items()} if isinstance(self.description, dict) else self.description
+        caption = {language_to_string_mapping[k]: v for k, v in self.caption.items()} if isinstance(self.caption, dict) else self.caption
+        topics = {language_to_string_mapping[k]: v for k, v in self.topics.items()} if isinstance(self.topics, dict) else self.topics
+        color = {language_to_string_mapping[k]: v for k, v in self.color.items()} if isinstance(self.color, dict) else self.color
+        title = {language_to_string_mapping[k]: v for k, v in self.title.items()} if isinstance(self.title, dict) else self.title
+
+        result.update({
+            "description": description,
+            "caption": caption,
+            "topics": topics,
+            "color": color,
+            "title": title,
+            "caption_lines_metadata": self.caption_lines_metadata.to_dict() if self.caption_lines_metadata is not None else None,
+            "reference_lines_metadata": self.reference_lines_metadata.to_dict() if self.reference_lines_metadata is not None else None
+        })
+
+        return result
