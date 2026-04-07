@@ -253,6 +253,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         self.prompt_settings_path = compose_path(self.config["prompt_settings"], self.config_path)
         self.num_processes = self.config.getint('num_processes', fallback=1)
         self.max_attempts = self.config.getint('max_attempts', fallback=3)
+        self.only_prepare_prompts = self.config.getboolean('only_prepare_prompts', fallback=False)
 
         with open(self.prompt_settings_path, 'r') as f:
             self.prompt_settings = json.load(f)
@@ -293,17 +294,26 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
                 else:
                     data.append(self.prepare_prompt_data(image, region, page_layout))
 
-        current_attempt = 0
+        if self.only_prepare_prompts:
+            for item in data:
+                metadata = item.region.graphical_metadata
+                if metadata.prompts is None:
+                    metadata.prompts = [item.prompt]
+                else:
+                    metadata.prompts.append(item.prompt)
 
-        unfinished_data = data
-        while len(unfinished_data) > 0 and current_attempt < self.max_attempts:
-            self.process_elements(unfinished_data)
-            self.process_image_captions(unfinished_data)
+        else:
+            current_attempt = 0
 
-            current_attempt += 1
+            unfinished_data = data
+            while len(unfinished_data) > 0 and current_attempt < self.max_attempts:
+                self.process_elements(unfinished_data)
+                self.process_image_captions(unfinished_data)
 
-            unfinished_data = [item for item in data if item.result is None]
-            self.logger.info(f"Captioning attempt #{current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) > 1 else ''} remaining.")
+                current_attempt += 1
+
+                unfinished_data = [item for item in data if item.result is None]
+                self.logger.info(f"Captioning attempt #{current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) > 1 else ''} remaining.")
 
         return page_layout
 
