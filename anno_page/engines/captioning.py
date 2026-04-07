@@ -508,3 +508,10 @@ class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
             self.logger.warning(f"Failed to get caption from API for region {prompt_data.region.id}: {response.text}")
 
         return image_caption
+
+
+class OpenRouterImageCaptioningEngine(ChatGPTImageCaptioningEngine):
+    def __init__(self, config, device, config_path):
+        super().__init__(config, device, config_path)
+
+        self.api_url = self.config.get("api_url", "https://openrouter.ai/api/v1/chat/completions")
