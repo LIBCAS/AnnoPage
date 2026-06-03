@@ -7,7 +7,9 @@ import requests
 import numpy as np
 
 from abc import abstractmethod
+from json import JSONDecodeError
 from jinja2 import Template
+from pydantic import BaseModel, ValidationError
 from multiprocessing import Pool
 
 from anno_page.core.utils import compose_path, config_get_list
@@ -212,13 +214,24 @@ class CaptionOrganizer:
         return bboxes, query_types
 
 
+class PromptResult(BaseModel):
+    caption_cz: str|None
+    caption_en: str|None
+    description_cz: str|None
+    description_en: str|None
+    topics_cz: str|list[str]|None
+    topics_en: str|list[str]|None
+    color_cz: str|None
+    color_en: str|None
+
+
 class PromptData:
     def __init__(self, image=None, region=None, metadata=None, prompt=None, result=None):
         self.image = image
         self.region = region
         self.metadata = metadata
         self.prompt = prompt
-        self.result = result
+        self.result: PromptResult|None = result
 
 
 class PromptBuilderEngine(BaseEngine):
@@ -264,7 +277,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         self.prompt_builder = PromptBuilderEngine()
 
     @abstractmethod
-    def generate_image_caption(self, prompt_data: PromptData):
+    def generate_image_caption(self, prompt_data: PromptData) -> PromptResult|None:
         pass
 
     @staticmethod
@@ -371,43 +384,26 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
                 self.logger.debug(f"No caption result for region {item.region.id}, skipping processing.")
                 continue
 
-            try:
-                image_caption_json = json.loads(item.result)
-            except:
-                self.logger.error(f"Failed to parse image caption JSON for region {item.region.id}: {item.result}")
-                item.result = None
-                continue
-
-            if not isinstance(image_caption_json, dict):
-                self.logger.warning(f"Invalid image caption JSON format for region {item.region.id}: {item.result}")
-                item.result = None
-                continue
-
-            if len(image_caption_json) == 0:
-                self.logger.warning(f"Empty image caption JSON for region {item.region.id}: {item.result}")
-                item.result = None
-                continue
-
             metadata: GraphicalObjectMetadata = item.region.graphical_metadata
 
             metadata.caption = {
-                Language.ENGLISH: image_caption_json.get("caption_en", None),
-                Language.CZECH: image_caption_json.get("caption_cz", None)
+                Language.ENGLISH: item.result.caption_en,
+                Language.CZECH: item.result.caption_cz
             }
 
             metadata.description = {
-                Language.ENGLISH: image_caption_json.get("description_en", None),
-                Language.CZECH: image_caption_json.get("description_cz", None)
+                Language.ENGLISH: item.result.description_en,
+                Language.CZECH: item.result.description_cz
             }
 
             metadata.topics = {
-                Language.ENGLISH: image_caption_json.get("topics_en", None),
-                Language.CZECH: image_caption_json.get("topics_cz", None)
+                Language.ENGLISH: item.result.topics_en,
+                Language.CZECH: item.result.topics_cz
             }
 
             metadata.color = {
-                Language.ENGLISH: image_caption_json.get("color_en", None),
-                Language.CZECH: image_caption_json.get("color_cz", None)
+                Language.ENGLISH: item.result.color_en,
+                Language.CZECH: item.result.color_cz
             }
 
             if metadata.prompts is None:
@@ -424,41 +420,19 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         return image_base64
 
 
-class OllamaImageCaptioningEngine(BaseImageCaptioningEngine):
+class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path)
 
-        self.api_url = self.config.get("api_url", "http://localhost:11434")
+        self.api_url = self.config["api"]
+        if self.api_url.lower() in {"openai", "chatgpt"}:
+            self.api_url = "https://api.openai.com/v1/chat/completions"
+        elif self.api_url.lower() in {"openrouter"}:
+            self.api_url = "https://openrouter.ai/api/v1/chat/completions"
+        elif self.api_url.lower() in {"cerit", "e-infra"}:
+            self.api_url = "https://llm.ai.e-infra.cz/v1/chat/completions"
 
-    def generate_image_caption(self, prompt_data: PromptData):
-        self.logger.debug(f"Generating caption for region {prompt_data.region.id} using {self.prompt_model} with prompt: {prompt_data.prompt}")
-
-        payload = {
-            "model": self.prompt_model,
-            "prompt": prompt_data.prompt,
-            "images": [self.encode_image(prompt_data.image)],
-            "stream": False
-        }
-
-        response = requests.post(self.api_url, json=payload)
-
-        try:
-            image_caption = response.json()["response"]
-            self.logger.info(f"Successfully generated caption for region {prompt_data.region.id}: {image_caption}")
-        except:
-            image_caption = None
-            self.logger.warning(f"Failed to get caption from API for region {prompt_data.region.id}: {response.text}")
-
-        return image_caption
-
-
-class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
-    def __init__(self, config, device, config_path):
-        super().__init__(config, device, config_path)
-
-        self.api_url = self.config.get("api_url", "https://api.openai.com/v1/chat/completions")
-
-        self.api_key = self.config["api_key"]
+        self.api_key = self.config.get("api_key", None)
         api_key_path = compose_path(self.api_key, self.config_path)
         if os.path.exists(api_key_path):
             with open(api_key_path, 'r') as f:
@@ -466,7 +440,7 @@ class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
 
         self.prompt_max_tokens = self.prompt_settings.get("max_tokens", None)
 
-    def generate_image_caption(self, prompt_data: PromptData):
+    def generate_image_caption(self, prompt_data: PromptData) -> PromptResult|None:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
@@ -492,26 +466,38 @@ class ChatGPTImageCaptioningEngine(BaseImageCaptioningEngine):
                         }
                     ]
                 }
-            ]
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "response_schema",
+                    "strict": True,
+                    "schema": PromptResult.model_json_schema()
+                }
+            }
         }
 
         if self.prompt_max_tokens is not None:
-            payload["max_tokens"] = self.prompt_max_tokens
+            payload["max_completion_tokens"] = self.prompt_max_tokens
 
         response = requests.post(self.api_url, headers=headers, json=payload)
+        if response.status_code != 200:
+            self.logger.warning(f"Request failed with status code {response.status_code}: {response.text}")
+            return None
+
+        result = response.json()["choices"][0]["message"]["content"]
+
+        image_caption = None
 
         try:
-            image_caption = response.json()["choices"][0]["message"]["content"]
-            self.logger.info(f"Successfully generated caption for region {prompt_data.region.id}: {image_caption}")
-        except:
-            image_caption = None
-            self.logger.warning(f"Failed to get caption from API for region {prompt_data.region.id}: {response.text}")
+            result_json = json.loads(result)
+            image_caption = PromptResult.model_validate(result_json)
+            self.logger.info(f"Successfully parsed caption for region {prompt_data.region.id}")
+        except JSONDecodeError:
+            self.logger.info(f"Failed to parse JSON for region {prompt_data.region.id}: {response.text}")
+        except ValidationError:
+            self.logger.info(f"Caption for region {prompt_data.region.id} does not conform to expected format: {result_json}")
+        except Exception as e:
+            self.logger.info(f"Exception for region {prompt_data.region.id}: {e}")
 
         return image_caption
-
-
-class OpenRouterImageCaptioningEngine(ChatGPTImageCaptioningEngine):
-    def __init__(self, config, device, config_path):
-        super().__init__(config, device, config_path)
-
-        self.api_url = self.config.get("api_url", "https://openrouter.ai/api/v1/chat/completions")

@@ -151,9 +151,16 @@ class AnnoPageWorker(DocWorkerWrapper):
         for section_name in config.sections():
             section = config[section_name]
             section_method = section["method"] if "method" in section else None
-            if section_method == "GPT_IMAGE_CAPTIONING":
+            if section_method == "OPENAI_COMPLETIONS_IMAGE_CAPTIONING":
+                logger.debug(f"Found OpenAI Completions section")
+
+                if "api" in settings:
+                    config.set(section_name, "API", settings["api"])
+                    logger.debug(f"Set API to {settings['api']}")
+
                 if "api_key" in settings:
                     config.set(section_name, "API_KEY", settings["api_key"])
+                    logger.debug(f"Set API_KEY to {settings['api_key']}")
 
                 if "categories" in settings:
                     categories = json.dumps(settings["categories"], ensure_ascii=False)
