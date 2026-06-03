@@ -292,7 +292,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
 
         for url_alias in url_aliases:
             for alias in url_alias["aliases"]:
-                self.llm_service_url_aliases[alias] = url_alias["urls"]
+                self.llm_service_url_aliases[alias.lower()] = url_alias["urls"]
 
     @staticmethod
     def _normalize_category_names(prompt_text):
@@ -438,7 +438,7 @@ class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path)
 
-        api = self.config["api"]
+        api = self.config["api"].lower()
         if api in self.llm_service_url_aliases and "completions" in self.llm_service_url_aliases[api]:
             self.api_url = self.llm_service_url_aliases[api]["completions"]
         else:
