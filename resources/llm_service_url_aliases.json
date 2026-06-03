@@ -1,0 +1,23 @@
+[
+    {
+        "aliases": ["openai", "chatgpt"],
+        "urls": {
+            "base": "https://api.openai.com",
+            "completions": "https://api.openai.com/v1/chat/completions"
+        }
+    },
+    {
+        "aliases": ["openrouter"],
+        "urls": {
+            "base": "https://openrouter.ai/api",
+            "completions": "https://openrouter.ai/api/v1/chat/completions"
+        }
+    },
+    {
+        "aliases": ["cerit", "e-infra"],
+        "urls": {
+            "base": "https://llm.ai.e-infra.cz",
+            "completions": "https://llm.ai.e-infra.cz/v1/chat/completions"
+        }
+    }
+]
