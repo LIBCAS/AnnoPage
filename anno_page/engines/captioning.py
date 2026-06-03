@@ -11,6 +11,7 @@ from json import JSONDecodeError
 from jinja2 import Template
 from pydantic import BaseModel, ValidationError
 from multiprocessing import Pool
+from urllib.parse import urljoin
 
 from anno_page.core.utils import compose_path, config_get_list
 from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata
@@ -268,6 +269,11 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         self.max_attempts = self.config.getint('max_attempts', fallback=3)
         self.only_prepare_prompts = self.config.getboolean('only_prepare_prompts', fallback=False)
 
+        self.llm_service_url_aliases = {}
+        llm_service_url_aliases_path = self.config.get('llm_service_url_aliases', fallback=None)
+        if llm_service_url_aliases_path is not None:
+            self._load_llm_service_url_aliases(compose_path(llm_service_url_aliases_path, self.config_path))
+
         with open(self.prompt_settings_path, 'r') as f:
             self.prompt_settings = json.load(f)
 
@@ -279,6 +285,14 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
     @abstractmethod
     def generate_image_caption(self, prompt_data: PromptData) -> PromptResult|None:
         pass
+
+    def _load_llm_service_url_aliases(self, path):
+        with open(path, 'r') as f:
+            url_aliases = json.load(f)
+
+        for url_alias in url_aliases:
+            for alias in url_alias["aliases"]:
+                self.llm_service_url_aliases[alias] = url_alias["urls"]
 
     @staticmethod
     def _normalize_category_names(prompt_text):
@@ -424,13 +438,11 @@ class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path)
 
-        self.api_url = self.config["api"]
-        if self.api_url.lower() in {"openai", "chatgpt"}:
-            self.api_url = "https://api.openai.com/v1/chat/completions"
-        elif self.api_url.lower() in {"openrouter"}:
-            self.api_url = "https://openrouter.ai/api/v1/chat/completions"
-        elif self.api_url.lower() in {"cerit", "e-infra"}:
-            self.api_url = "https://llm.ai.e-infra.cz/v1/chat/completions"
+        api = self.config["api"]
+        if api in self.llm_service_url_aliases and "completions" in self.llm_service_url_aliases[api]:
+            self.api_url = self.llm_service_url_aliases[api]["completions"]
+        else:
+            self.api_url = api
 
         self.api_key = self.config.get("api_key", None)
         api_key_path = compose_path(self.api_key, self.config_path)
