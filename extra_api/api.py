@@ -1,9 +1,14 @@
 import uvicorn
 import fastapi
 import configparser
+import urllib.error
+import urllib.request
 
 from typing import Optional, Union, Dict, Any
 from fastapi import FastAPI, APIRouter, Request, Depends, Body
+from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 from contextlib import asynccontextmanager
 
@@ -13,6 +18,20 @@ from anno_page.engines.translation import TranslationEngine
 
 
 api_router = APIRouter()
+WEB_CLIENT_DIR = Path(__file__).parent / "web_client"
+ANNOPAGE_API_URL = "https://annopage.orbis.lib.cas.cz"
+SKIPPED_PROXY_HEADERS = {
+    "connection",
+    "content-length",
+    "host",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
+    "upgrade",
+}
 
 
 class LoadedEngines:
@@ -194,9 +213,58 @@ app = FastAPI(title="AnnoPageExtraAPI", lifespan=lifespan)
 app.include_router(api_router, prefix="/v1")
 
 
+@app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def proxy_annopage_api(path: str, request: Request):
+    query = f"?{request.url.query}" if request.url.query else ""
+    url = f"{ANNOPAGE_API_URL.rstrip('/')}/{path}{query}"
+    headers = {
+        key: value
+        for key, value in request.headers.items()
+        if key.lower() not in SKIPPED_PROXY_HEADERS
+    }
+    body = await request.body()
+
+    proxy_request = urllib.request.Request(
+        url=url,
+        data=body or None,
+        headers=headers,
+        method=request.method
+    )
+
+    try:
+        with urllib.request.urlopen(proxy_request) as proxy_response:
+            response_body = proxy_response.read()
+            response_headers = {
+                key: value
+                for key, value in proxy_response.headers.items()
+                if key.lower() not in SKIPPED_PROXY_HEADERS
+            }
+            response_headers["X-AnnoPage-Proxy-Target"] = url
+            return Response(
+                content=response_body,
+                status_code=proxy_response.status,
+                headers=response_headers
+            )
+    except urllib.error.HTTPError as error:
+        response_headers = {
+            key: value
+            for key, value in error.headers.items()
+            if key.lower() not in SKIPPED_PROXY_HEADERS
+        }
+        response_headers["X-AnnoPage-Proxy-Target"] = url
+        return Response(
+            content=error.read(),
+            status_code=error.code,
+            headers=response_headers
+        )
+
+
+app.mount("/", StaticFiles(directory=WEB_CLIENT_DIR, html=True), name="web_client")
+
+
 def main():
-    uvicorn.run("anno_page.extra_api.api:app",
-                host="127.0.0.1",
+    uvicorn.run(app,
+                host="0.0.0.0",
                 port=8666,
                 reload=False)
 
