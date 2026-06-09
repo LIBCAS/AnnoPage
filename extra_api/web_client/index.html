@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AnnoPage WebClient</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" defer></script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <header class="app-header">
+        <div>
+            <h1>AnnoPage WebClient</h1>
+        </div>
+    </header>
+
+    <main class="app-shell">
+        <section class="panel">
+            <h2>Job Settings</h2>
+
+            <form id="job-form" class="job-form">
+                <div class="field-group two-columns">
+                    <label>
+                        Captioning provider
+                        <select id="captioning-provider" name="captioningProvider"></select>
+                    </label>
+
+                    <label>
+                        Captioning model
+                        <input id="captioning-model" name="captioningModel" type="text" autocomplete="off">
+                    </label>
+                </div>
+
+                <label>
+                    Provider API key
+                    <input id="captioning-api-key" name="captioningApiKey" type="text" autocomplete="off">
+                </label>
+
+                <div class="field-group two-columns">
+                    <label>
+                        Image
+                        <input id="image-file" name="imageFile" type="file" accept="image/*" required>
+                    </label>
+
+                    <label>
+                        XML file
+                        <input id="xml-file" name="xmlFile" type="file" accept=".xml,text/xml,application/xml">
+                    </label>
+                </div>
+
+                <fieldset class="radio-group">
+                    <legend>XML type</legend>
+                    <label class="radio-option">
+                        <input type="radio" name="xmlType" value="alto" checked disabled>
+                        ALTO XML
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="xmlType" value="page" disabled>
+                        PAGE XML
+                    </label>
+                </fieldset>
+
+                <button id="submit-button" class="primary-button" type="submit">Submit Job</button>
+            </form>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <h2>Result</h2>
+                <div class="status-actions">
+                    <span id="job-status" class="status-label">Idle</span>
+                    <a id="zip-download" class="zip-download disabled" download="annopage-results.zip" aria-disabled="true">Download ZIP</a>
+                </div>
+            </div>
+
+            <div id="result-view" class="result-view hidden">
+                <div class="tabs" role="tablist" aria-label="Result views">
+                    <button id="original-image-tab" class="tab-button active" type="button" role="tab" aria-selected="true" aria-controls="original-image-panel" data-tab="original-image">Original image</button>
+                    <button id="original-xml-tab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="original-xml-panel" data-tab="original-xml">Original XML</button>
+                    <button id="render-tab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="render-panel" data-tab="render">Render</button>
+                    <button id="xml-tab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="xml-panel" data-tab="xml">Updated XML</button>
+                    <button id="log-tab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="log-panel" data-tab="log">Log</button>
+                </div>
+
+                <div id="original-image-panel" class="tab-panel active" role="tabpanel" aria-labelledby="original-image-tab" data-panel="original-image">
+                    <img id="original-image" alt="Original uploaded image">
+                </div>
+
+                <div id="original-xml-panel" class="tab-panel" role="tabpanel" aria-labelledby="original-xml-tab" data-panel="original-xml">
+                    <textarea id="original-xml-output" readonly spellcheck="false"></textarea>
+                </div>
+
+                <div id="render-panel" class="tab-panel" role="tabpanel" aria-labelledby="render-tab" data-panel="render">
+                    <img id="render-image" alt="Rendered AnnoPage result">
+                    <a id="render-download" class="download-link" download>Download render</a>
+                </div>
+
+                <div id="xml-panel" class="tab-panel" role="tabpanel" aria-labelledby="xml-tab" data-panel="xml">
+                    <textarea id="xml-output" readonly spellcheck="false"></textarea>
+                    <a id="xml-download" class="download-link" download>Download XML</a>
+                </div>
+
+                <div id="log-panel" class="tab-panel" role="tabpanel" aria-labelledby="log-tab" data-panel="log">
+                    <pre id="log-output" class="log-output"></pre>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
