@@ -113,8 +113,6 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
 
                 initial_result = self.process_initial(region, initial_crop, context_crop, context_lines)
 
-                print(initial_result)
-
                 if initial_result is not None:
                     region.transcription = initial_result.initial
                     if initial_result.include_space:
