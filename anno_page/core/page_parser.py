@@ -4,7 +4,7 @@ import logging
 
 from anno_page.engines import (LayoutProcessingEngine, YoloDetectionEngine, HuggingfaceImageEmbeddingEngine,
                                OpenAICompletionsImageCaptioningEngine, CaptionYoloNearestEngine,
-                               CaptionYoloKeypointsEngine, CaptionYoloOrganizerEngine)
+                               CaptionYoloKeypointsEngine, CaptionYoloOrganizerEngine, InitialRecognitionEngine)
 
 
 def operation_factory(config, device, config_path) -> LayoutProcessingEngine | None:
@@ -33,6 +33,9 @@ def operation_factory(config, device, config_path) -> LayoutProcessingEngine | N
     elif config['METHOD'] == 'CAPTION_YOLO_KEYPOINTS':
         logger.info("Creating CaptionYoloKeypointsEngine engine")
         engine = CaptionYoloKeypointsEngine(config, device, config_path=config_path)
+    elif config["METHOD"] == "INITIAL_RECOGNITION":
+        logger.info("Creating InitialRecognitionEngine engine")
+        engine = InitialRecognitionEngine(config, device, config_path=config_path)
     else:
         logger.warning(f"Unknown operation method: {config['METHOD']}")
 
