@@ -227,7 +227,7 @@ class GraphicalObjectMetadata(BaseMetadata):
                  title: Optional[str | Dict[Language, str]] = None,
                  caption_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  reference_lines_metadata: Optional[RelatedLinesMetadata] = None,
-                 continuation_line: Optional[TextLine] = None,
+                 continuing_line: Optional[TextLine] = None,
                  prompts: Optional[List[str]] = None):
         super().__init__(tag_id, mods_id, mods_uuid)
         self.tag_description = tag_description
@@ -236,7 +236,7 @@ class GraphicalObjectMetadata(BaseMetadata):
         self.color = color
         self.description = description
         self.title = title
-        self.continuation_line = continuation_line
+        self.continuing_line = continuing_line
         self.prompts = prompts
 
         self.caption_lines_metadata = caption_lines_metadata

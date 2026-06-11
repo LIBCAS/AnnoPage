@@ -35,8 +35,8 @@ def region_to_altoxml(region: RegionLayout, page_content_element):
     if region.graphical_metadata is not None:
         composed_block_element.set("TAGREFS", region.graphical_metadata.tag_id)
 
-        if region.graphical_metadata.continuation_line is not None:
-            text_line_element = page_content_element.find(f".//{{*}}TextLine[@ID='{region.graphical_metadata.continuation_line.id}']")
+        if region.graphical_metadata.continuing_line is not None:
+            text_line_element = page_content_element.find(f".//{{*}}TextLine[@ID='{region.graphical_metadata.continuing_line.id}']")
             if text_line_element is not None:
                 string_element = text_line_element.find(".//{*}String")
                 if string_element is not None:

@@ -1,6 +1,7 @@
 import os
 import cv2
 import json
+import numpy as np
 import base64
 import requests
 
@@ -16,9 +17,7 @@ from anno_page.core.metadata import GraphicalObjectMetadata
 
 class InitialRecognitionResult(BaseModel):
     initial: str
-    line_id: int|None
     include_space: bool
-    text: str|None
 
 
 class InitialRecognitionEngine(LayoutProcessingEngine):
@@ -26,8 +25,12 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
         super().__init__(config, device, config_path, requires_lines=True)
 
         self.categories = config_get_list(self.config, key="categories", fallback=["initial"], make_lowercase=True)
-        self.scaling_factor = config.getfloat("scaling_factor", fallback=0.5)
         self.max_attempts = config.getint("max_attempts", fallback=3)
+
+        self.top_down_target_coefficient = 0.0
+        self.left_right_target_coefficient = 2
+        self.top_down_context_coefficient = 1.0
+        self.left_right_context_coefficient = 1.0
 
         self.api_key = self.config.get("api_key", None)
         api_key_path = compose_path(self.api_key, self.config_path)
@@ -78,58 +81,24 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
                 continue
 
             if self.categories is None or region.category.lower() in self.categories:
-                x_min, y_min, x_max, y_max = region.get_polygon_bounding_box()
+                initial_crop, context_crop, continuing_line = self._prepare_prompt_data(image, page_layout, region)
 
-                initial_crop = image[y_min:y_max, x_min:x_max]
+                result = self._process_initial(region, initial_crop, context_crop, continuing_line)
 
-                width = x_max - x_min
-                height = y_max - y_min
-
-                extended_x_min = round(x_min - width * self.scaling_factor)
-                extended_x_max = round(x_max + width * self.scaling_factor)
-                extended_y_min = round(y_min - height * self.scaling_factor)
-                extended_y_max = round(y_max + height * self.scaling_factor)
-
-                bounding_box = [[extended_x_min, extended_y_min],
-                                [extended_x_max, extended_y_min],
-                                [extended_x_max, extended_y_max],
-                                [extended_x_min, extended_y_max]]
-
-                initial_polygon = Polygon(bounding_box)
-
-                nearby_lines = []
-                for line in page_layout.lines_iterator():
-                    line_polygon = Polygon(line.polygon)
-                    if line_polygon.intersects(initial_polygon):
-                        nearby_lines.append(line)
-
-                context_x_min = round(min([point[0] for line in nearby_lines for point in line.polygon]) - width * self.scaling_factor)
-                context_x_max = round(max([point[0] for line in nearby_lines for point in line.polygon]) + width * self.scaling_factor)
-                context_y_min = round(min([point[1] for line in nearby_lines for point in line.polygon]) - height * self.scaling_factor)
-                context_y_max = round(max([point[1] for line in nearby_lines for point in line.polygon]) + height * self.scaling_factor)
-
-                context_crop = image[context_y_min:context_y_max, context_x_min:context_x_max]
-                context_lines = [{"line_id": i, "transcription": line.transcription} for i, line in enumerate(nearby_lines)]
-
-                initial_result = self.process_initial(region, initial_crop, context_crop, context_lines)
-
-                if initial_result is not None:
-                    region.transcription = initial_result.initial
-                    if initial_result.include_space:
+                if result is not None:
+                    region.transcription = result.initial
+                    if result.include_space:
                         region.transcription += " "
 
                     metadata: GraphicalObjectMetadata = region.graphical_metadata
                     if metadata is not None:
-                        metadata.tag_description = initial_result.text
-                        if initial_result.line_id is not None and initial_result.line_id < len(nearby_lines):
-                            metadata.continuation_line = nearby_lines[initial_result.line_id]
-                            self.logger.info(f"Setting continuation line to {nearby_lines[initial_result.line_id].id}")
+                        metadata.tag_description = result.initial
+                        metadata.continuing_line = continuing_line
 
         return page_layout
 
-    def process_initial(self, region, initial_crop, context_crop, context_lines) -> InitialRecognitionResult|None:
-        example_output = InitialRecognitionResult(initial="X", line_id=42, include_space=True,
-                                                  text="X is the twenty-fourth letter of the Latin alphabet.")
+    def _process_initial(self, region, initial_crop, context_crop, continuing_line) -> InitialRecognitionResult|None:
+        example_output = InitialRecognitionResult(initial="X", include_space=True)
 
         prompt_template = self.prompt_text
         if isinstance(prompt_template, dict):
@@ -137,7 +106,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
         prompt_template = Template(prompt_template)
 
         prompt_text = prompt_template.render(example_output=example_output.model_dump_json(indent=4),
-                                             context_lines=json.dumps(context_lines, indent=4))
+                                             continuing_line=continuing_line.transcription)
 
         request_args = {
             "model": self.prompt_model,
@@ -194,3 +163,62 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
 
         self.logger.warning(f"Could not get valid result for region {region.id} after {self.max_attempts} attempts")
         return None
+
+    def _prepare_prompt_data(self, image, page_layout, region):
+        region_bbox = region.get_polygon_bounding_box()
+        x_min, y_min, x_max, y_max = region_bbox
+
+        median_line_height = np.median([sum(line.heights) for line in page_layout.lines_iterator()])
+
+        initial_crop = image[y_min:y_max, x_min:x_max]
+        nearby_lines, continuing_line = self._get_initial_lines(page_layout, region_bbox, median_line_height)
+
+        context_crop = self._get_context_crop(image, region_bbox, nearby_lines, median_line_height)
+
+        return initial_crop, context_crop, continuing_line
+
+    def _get_initial_lines(self, page_layout, region_bbox, median_line_height):
+        x_min, y_min, x_max, y_max = region_bbox
+        width = x_max - x_min
+
+
+
+        target_top = y_min - median_line_height * self.top_down_target_coefficient
+        target_bottom = y_max + median_line_height * self.top_down_target_coefficient
+        target_left = x_min + width / 2
+        target_right = x_max + median_line_height * self.left_right_target_coefficient
+
+        target_polygon = Polygon([[target_left, target_top],
+                                  [target_right, target_top],
+                                  [target_right, target_bottom],
+                                  [target_left, target_bottom]])
+
+        nearby_lines = []
+        for line in page_layout.lines_iterator():
+            line_polygon = Polygon(line.polygon)
+            if line_polygon.intersects(target_polygon):
+                nearby_lines.append(line)
+
+        continuing_line = None
+        continuing_line_baseline_point = None
+        for line in nearby_lines:
+            left_baseline_point = sorted(line.baseline, key=lambda pair: pair[0])[0]
+
+            if target_left < left_baseline_point[0] < target_right and target_top < left_baseline_point[1] < target_bottom:
+                if continuing_line_baseline_point is None or continuing_line_baseline_point[1] > left_baseline_point[1]:
+                    continuing_line = line
+                    continuing_line_baseline_point = left_baseline_point
+
+        return nearby_lines, continuing_line
+
+    def _get_context_crop(self, image, region_bbox, nearby_lines, median_line_height):
+        x_min, y_min, x_max, y_max = region_bbox
+
+        context_x_min = round(min(x_min, min([point[0] for line in nearby_lines for point in line.polygon])) - median_line_height * self.left_right_context_coefficient)
+        context_x_max = round(max(x_max, max([point[0] for line in nearby_lines for point in line.polygon])) + median_line_height * self.left_right_context_coefficient)
+        context_y_min = round(min(y_min, min([point[1] for line in nearby_lines for point in line.polygon])) - median_line_height * self.top_down_context_coefficient)
+        context_y_max = round(max(y_min, max([point[1] for line in nearby_lines for point in line.polygon])) + median_line_height * self.top_down_context_coefficient)
+
+        context_crop = image[context_y_min:context_y_max, context_x_min:context_x_max]
+
+        return context_crop
