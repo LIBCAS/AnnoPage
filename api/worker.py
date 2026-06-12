@@ -39,6 +39,8 @@ def parse_arguments():
     parser.add_argument("--logging-date-format", type=str, default="%Y-%m-%d_%H-%M-%S", help="Logging date format string")
     parser.add_argument("--log-files-path", type=str, default=None, required=False, help="Path to a directory where log files will be stored")
 
+    parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
+
     return parser.parse_args()
 
 
@@ -67,6 +69,31 @@ def setup_logging(logging_level, logging_format="", logging_date_format=None, lo
 
 
 class AnnoPageWorker(DocWorkerWrapper):
+    def __init__(self,
+                 api_url: str,
+                 connector: Connector,
+                 base_dir: Optional[str] = None,
+                 jobs_dir: Optional[str] = None,
+                 engines_dir: Optional[str] = None,
+                 polling_interval: float = 5.0,
+                 cleanup_job_dir: bool = False,
+                 cleanup_old_engines: bool = False,
+                 download_engine_using_stream: bool = False,
+                 device="cpu"):
+        super().__init__(
+            api_url=api_url,
+            connector=connector,
+            base_dir=base_dir,
+            jobs_dir=jobs_dir,
+            engines_dir=engines_dir,
+            polling_interval=polling_interval,
+            cleanup_job_dir=cleanup_job_dir,
+            cleanup_old_engines=cleanup_old_engines,
+            download_engine_using_stream=download_engine_using_stream
+        )
+
+        self.device = device
+
     def process_job(self,
                     job: Job,
                     job_log_file_handler: logging.FileHandler,
@@ -91,7 +118,8 @@ class AnnoPageWorker(DocWorkerWrapper):
             "annopage",
             "--config", config_path,
             "--input-image-path", images_dir,
-            "--logging-level", logging.getLevelName(logger.getEffectiveLevel())
+            "--logging-level", logging.getLevelName(logger.getEffectiveLevel()),
+            "--device", self.device
         ]
 
         if job.alto_required:
@@ -209,7 +237,8 @@ def main():
         polling_interval=args.polling_interval,
         cleanup_job_dir=args.cleanup_job_dir,
         cleanup_old_engines=args.cleanup_old_engines,
-        download_engine_using_stream=True
+        download_engine_using_stream=True,
+        device=args.device
     )
     logger.debug("AnnoPageWorker initialized.")
 
