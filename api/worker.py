@@ -125,6 +125,9 @@ class AnnoPageWorker(DocWorkerWrapper):
         if job.alto_required:
             process_params += ["--input-alto-path", alto_dir]
 
+        if job.page_required:
+            process_params += ["--input-xml-path", page_xml_dir]
+
         if job.meta_json_required:
             process_params += ["--input-metadata-path", meta_file]
 
