@@ -7,7 +7,7 @@ from pero_ocr.core.layout import RegionLayout, PageLayout, create_ocr_processing
 
 from anno_page import globals
 from anno_page.enums import Category
-from anno_page.core.utils import find_textline_by_geometry_and_content
+from anno_page.core.utils import find_textline
 
 
 def region_to_altoxml(region: RegionLayout, page_content_element):
@@ -34,6 +34,14 @@ def region_to_altoxml(region: RegionLayout, page_content_element):
 
     if region.graphical_metadata is not None:
         composed_block_element.set("TAGREFS", region.graphical_metadata.tag_id)
+
+        if region.graphical_metadata.continuing_line is not None:
+            text_line_element = page_content_element.find(f".//{{*}}TextLine[@ID='{region.graphical_metadata.continuing_line.id}']")
+            if text_line_element is not None:
+                string_element = text_line_element.find(".//{*}String")
+                if string_element is not None:
+                    string_element.attrib["SUBS_CONTENT"] = region.transcription + string_element.attrib["CONTENT"]
+                    string_element.attrib["SUBS_TYPE"] = "Abbreviation"
 
     return composed_block_element
 
@@ -106,18 +114,16 @@ def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_ve
         region_to_altoxml(region, print_space_element)
         if region.graphical_metadata is not None:
             region.graphical_metadata.to_altoxml(tags_element,
-                                       category=region.category,
-                                       bounding_box=region.get_polygon_bounding_box(),
-                                       confidence=region.detection_confidence,
-                                       mods_namespace=mods_namespace)
+                                                 category=region.category,
+                                                 bounding_box=region.get_polygon_bounding_box(),
+                                                 confidence=region.detection_confidence,
+                                                 mods_namespace=mods_namespace)
 
     for line in page_layout.lines_iterator([None, 'text']):
         if line.graphical_metadata is not None:
             tag_refs = set([metadata.tag_id for metadata in line.graphical_metadata])
 
-            text_line_element = print_space_element.find(f".//TextLine[@ID='{line.id}']", namespaces)
-            if text_line_element is None:
-                text_line_element = find_textline_by_geometry_and_content(print_space_element, line, namespaces)
+            text_line_element = find_textline(print_space_element, line, namespaces)
 
             if text_line_element is not None:
                 current_tagrefs = text_line_element.attrib["TAGREFS"] if "TAGREFS" in text_line_element.attrib else None
