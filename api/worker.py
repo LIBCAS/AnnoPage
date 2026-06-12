@@ -37,14 +37,14 @@ def parse_arguments():
     parser.add_argument("--logging-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO", help="Logging level")
     parser.add_argument("--logging-format", type=str, default="[%(levelname)s|%(asctime)s|%(filename)s:%(name)s]: %(message)s", help="Logging format string")
     parser.add_argument("--logging-date-format", type=str, default="%Y-%m-%d_%H-%M-%S", help="Logging date format string")
-    parser.add_argument("--log-files-path", type=str, default=None, required=False, help="Path to a directory where log files will be stored")
+    parser.add_argument("--log-file-path", type=str, default=None, required=False, help="Path to a directory where log files will be stored")
 
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
 
     return parser.parse_args()
 
 
-def setup_logging(logging_level, logging_format="", logging_date_format=None, log_files_path=None):
+def setup_logging(logging_level, logging_format="", logging_date_format=None, log_file_path=None):
     level = logging.getLevelName(logging_level)
 
     console_log_formatter = logging.Formatter(logging_format, datefmt=logging_date_format)
@@ -56,9 +56,9 @@ def setup_logging(logging_level, logging_format="", logging_date_format=None, lo
         console_handler = logging.StreamHandler()
         root_logger.addHandler(console_handler)
 
-    if log_files_path is not None:
+    if log_file_path is not None:
         time_rotating_file_handler = TimedRotatingFileHandler(
-            filename=log_files_path,
+            filename=log_file_path,
             when="midnight",
             utc=True)
 
@@ -226,7 +226,7 @@ def main():
     setup_logging(args.logging_level,
                   logging_format=args.logging_format,
                   logging_date_format=args.logging_date_format,
-                  log_files_path=args.log_files_path)
+                  log_file_path=args.log_file_path)
 
     connector = Connector(args.api_key, user_agent="AnnoPageWorker/1.0")
     logger.debug("Connector initialized.")
