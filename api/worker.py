@@ -223,6 +223,18 @@ class AnnoPageWorker(DocWorkerWrapper):
 def main():
     args = parse_arguments()
 
+    if args.base_dir is not None:
+        os.makedirs(args.base_dir, exist_ok=True)
+
+    if args.jobs_dir is not None:
+        os.makedirs(args.jobs_dir, exist_ok=True)
+
+    if args.engines_dir is not None:
+        os.makedirs(args.engines_dir, exist_ok=True)
+
+    if args.log_file_path is not None:
+        os.makedirs(os.path.dirname(args.log_file_path), exist_ok=True)
+
     setup_logging(args.logging_level,
                   logging_format=args.logging_format,
                   logging_date_format=args.logging_date_format,
