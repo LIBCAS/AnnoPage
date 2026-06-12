@@ -6,6 +6,7 @@ from pero_ocr.core.layout import RegionLayout
 
 from anno_page.core.utils import compose_path, config_get_list
 from anno_page.core.metadata import GraphicalObjectMetadata
+from anno_page.core.services import UuidService
 from anno_page.engines import LayoutProcessingEngine
 from anno_page.enums import Category, Language
 
@@ -20,6 +21,8 @@ class YoloDetectionEngine(LayoutProcessingEngine):
                                      image_size=self.config.getint("IMAGE_SIZE", 640))
 
         self.categories = config_get_list(self.config, key="categories", fallback=None, make_lowercase=True)
+
+        self.uuid_service = UuidService()
 
     def process_page(self, page_image, page_layout):
         results = self.detector(page_image)
@@ -39,7 +42,7 @@ class YoloDetectionEngine(LayoutProcessingEngine):
                 mods_id = self.get_next_mods_id(page_layout)
                 region.graphical_metadata = GraphicalObjectMetadata(tag_id=region_id,
                                                                     mods_id=mods_id,
-                                                                    mods_uuid=uuid.uuid4())
+                                                                    mods_uuid=self.uuid_service())
 
                 page_layout.regions.append(region)
 

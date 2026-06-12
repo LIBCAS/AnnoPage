@@ -1,13 +1,12 @@
-import uuid
 import torch
 import transformers
 
 from PIL import Image
-from datetime import datetime
 from transformers import AutoModel, AutoProcessor
 
 from anno_page import globals
 from anno_page.core.utils import config_get_list
+from anno_page.core.services import DateTimeService, UuidService
 from anno_page.engines import BaseEngine, LayoutProcessingEngine
 from anno_page.engines.helpers import config_get_dtype
 from anno_page.enums import Category, Language
@@ -26,6 +25,9 @@ class HuggingfaceImageEmbeddingEngine(LayoutProcessingEngine):
         self.model = AutoModel.from_pretrained(self.model_name, torch_dtype=self.precision).to(self.device).eval()
         self.processor = AutoProcessor.from_pretrained(self.model_name)
 
+        self.uuid_service = UuidService()
+        self.date_time_service = DateTimeService()
+
     def process_page(self, page_image, page_layout):
         for region in page_layout.regions:
             if region.category is None or region.category.lower() == "text":
@@ -38,7 +40,7 @@ class HuggingfaceImageEmbeddingEngine(LayoutProcessingEngine):
                 if region_image.size == 0:
                     continue
 
-                object_uuid = region.graphical_metadata.mods_uuid if region.graphical_metadata is not None else uuid.uuid4()
+                object_uuid = region.graphical_metadata.mods_uuid if region.graphical_metadata is not None else self.uuid_service()
 
                 image_inputs = self.processor(images=Image.fromarray(region_image), return_tensors="pt").to(self.device)
                 with torch.no_grad():
@@ -63,7 +65,7 @@ class HuggingfaceImageEmbeddingEngine(LayoutProcessingEngine):
                     processing_info=ProcessingInfo(
                         system=globals.software_name,
                         version=globals.software_version,
-                        datetime=datetime.now().isoformat(),
+                        datetime=self.date_time_service(),
                         model=self.model_name,
                         decimal_places=self.decimal_places,
                         precision=str(self.precision)
@@ -85,6 +87,8 @@ class HuggingfaceTextEmbeddingEngine(BaseEngine):
 
         self.model = AutoModel.from_pretrained(self.model_name, torch_dtype=self.precision).to(self.device).eval()
         self.processor = AutoProcessor.from_pretrained(self.model_name)
+
+        self.date_time_service = DateTimeService()
 
     def process(self, data: str | list[str]) -> list[ObjectEmbedding]:
         if isinstance(data, str):
@@ -109,7 +113,7 @@ class HuggingfaceTextEmbeddingEngine(BaseEngine):
                 processing_info=ProcessingInfo(
                     system=globals.software_name,
                     version=globals.software_version,
-                    datetime=datetime.now().isoformat(),
+                    datetime=self.date_time_service(),
                     model=self.model_name,
                     decimal_places=self.decimal_places,
                     precision=str(self.precision)
