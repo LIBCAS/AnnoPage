@@ -1,19 +1,19 @@
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, timezone as tz
 
 class UuidService:
     def __call__(self):
         return self.generate_uuid()
 
     @staticmethod
-    def generate_uuid():
-        return str(uuid4())
+    def generate_uuid(*args, **kwargs):
+        return uuid4()
 
 
 class DateTimeService:
     def __call__(self, **kwargs):
-        return self.get_date_time(**kwargs)
+        return self.get_datetime_now(**kwargs)
 
     @staticmethod
-    def get_date_time(**kwargs):
-        return datetime.now().isoformat(**kwargs)
+    def get_datetime_now(*args, timezone=tz.utc, **kwargs):
+        return datetime.now(timezone)

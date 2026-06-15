@@ -40,7 +40,7 @@ class HuggingfaceImageEmbeddingEngine(LayoutProcessingEngine):
                 if region_image.size == 0:
                     continue
 
-                object_uuid = region.graphical_metadata.mods_uuid if region.graphical_metadata is not None else self.uuid_service()
+                object_uuid = region.graphical_metadata.mods_uuid if region.graphical_metadata is not None else str(self.uuid_service())
 
                 image_inputs = self.processor(images=Image.fromarray(region_image), return_tensors="pt").to(self.device)
                 with torch.no_grad():
@@ -65,7 +65,7 @@ class HuggingfaceImageEmbeddingEngine(LayoutProcessingEngine):
                     processing_info=ProcessingInfo(
                         system=globals.software_name,
                         version=globals.software_version,
-                        datetime=self.date_time_service(),
+                        datetime=self.date_time_service().isoformat(),
                         model=self.model_name,
                         decimal_places=self.decimal_places,
                         precision=str(self.precision)
@@ -113,7 +113,7 @@ class HuggingfaceTextEmbeddingEngine(BaseEngine):
                 processing_info=ProcessingInfo(
                     system=globals.software_name,
                     version=globals.software_version,
-                    datetime=self.date_time_service(),
+                    datetime=self.date_time_service().isoformat(),
                     model=self.model_name,
                     decimal_places=self.decimal_places,
                     precision=str(self.precision)

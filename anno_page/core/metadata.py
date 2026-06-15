@@ -16,8 +16,8 @@ class BaseMetadata:
     def __init__(self, tag_id, mods_id, mods_uuid=None, record_identifier=None):
         self.tag_id = tag_id
         self.mods_id = mods_id
-        self.mods_uuid = UuidService.generate_uuid() if mods_uuid is None else mods_uuid
-        self.record_identifier = UuidService.generate_uuid() if record_identifier is None else record_identifier
+        self.mods_uuid = str(UuidService.generate_uuid()) if mods_uuid is None else mods_uuid
+        self.record_identifier = str(UuidService.generate_uuid()) if record_identifier is None else record_identifier
 
     @staticmethod
     def _add_genre_element(mods, mods_namespace, language, content, genre_type=None):
@@ -181,7 +181,7 @@ class RelatedLinesMetadata(BaseMetadata):
             self._add_related_item_element(mods, mods_namespace, values["related_item_type"], related_mods_id)
 
         if creation_date_time is None:
-            creation_date_time = DateTimeService.get_date_time(timespec='seconds')
+            creation_date_time = DateTimeService.get_datetime_now().isoformat(timespec='seconds')
 
         self._add_record_info_element(mods,
                                       mods_namespace,
@@ -336,7 +336,7 @@ class GraphicalObjectMetadata(BaseMetadata):
             self._add_related_item_element(mods, mods_namespace, "references", self.reference_lines_metadata.mods_id)
 
         if creation_date_time is None:
-            creation_date_time = DateTimeService.get_date_time(timespec='seconds')
+            creation_date_time = DateTimeService.get_datetime_now().isoformat(timespec='seconds')
 
         self._add_record_info_element(mods,
                                       mods_namespace,
