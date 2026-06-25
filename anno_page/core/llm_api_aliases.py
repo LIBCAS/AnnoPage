@@ -1,11 +1,16 @@
 import json
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 _llm_api_aliases = None
 
 
 def get_llm_api_aliases():
     if _llm_api_aliases is None:
-        raise ValueError("LLM API aliases has not been initialized yet")
+        logger.warning("LLM API aliases have not been loaded yet. Please call load_llm_api_aliases(path) first.")
+        return {}
 
     return _llm_api_aliases
 
