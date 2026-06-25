@@ -180,7 +180,7 @@ def test_alto_image_with_basic_metadata_and_text_lines():
             Language.ENGLISH: "grayscale",
             Language.CZECH: "černobílý"
         },
-        title="Fig. 1: Overview"
+        title="This is line no. 2"
     )
 
     text_top = 120
@@ -300,7 +300,7 @@ def test_alto_image_with_basic_metadata_and_text_lines_tagrefs():
             Language.ENGLISH: "grayscale",
             Language.CZECH: "černobílý"
         },
-        title="Fig. 1: Overview"  # TODO: Stejne jako popisek nize?
+        title="This is line no. 2"
     )
 
     text_top = 120
