@@ -37,12 +37,14 @@ def parse_arguments():
     parser.add_argument("--logging-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO", help="Logging level")
     parser.add_argument("--logging-format", type=str, default="[%(levelname)s|%(asctime)s|%(filename)s:%(name)s]: %(message)s", help="Logging format string")
     parser.add_argument("--logging-date-format", type=str, default="%Y-%m-%d_%H-%M-%S", help="Logging date format string")
-    parser.add_argument("--log-files-path", type=str, default=None, required=False, help="Path to a directory where log files will be stored")
+    parser.add_argument("--log-file-path", type=str, default=None, required=False, help="Path to a directory where log files will be stored")
+
+    parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
 
     return parser.parse_args()
 
 
-def setup_logging(logging_level, logging_format="", logging_date_format=None, log_files_path=None):
+def setup_logging(logging_level, logging_format="", logging_date_format=None, log_file_path=None):
     level = logging.getLevelName(logging_level)
 
     console_log_formatter = logging.Formatter(logging_format, datefmt=logging_date_format)
@@ -54,9 +56,9 @@ def setup_logging(logging_level, logging_format="", logging_date_format=None, lo
         console_handler = logging.StreamHandler()
         root_logger.addHandler(console_handler)
 
-    if log_files_path is not None:
+    if log_file_path is not None:
         time_rotating_file_handler = TimedRotatingFileHandler(
-            filename=log_files_path,
+            filename=log_file_path,
             when="midnight",
             utc=True)
 
@@ -67,6 +69,31 @@ def setup_logging(logging_level, logging_format="", logging_date_format=None, lo
 
 
 class AnnoPageWorker(DocWorkerWrapper):
+    def __init__(self,
+                 api_url: str,
+                 connector: Connector,
+                 base_dir: Optional[str] = None,
+                 jobs_dir: Optional[str] = None,
+                 engines_dir: Optional[str] = None,
+                 polling_interval: float = 5.0,
+                 cleanup_job_dir: bool = False,
+                 cleanup_old_engines: bool = False,
+                 download_engine_using_stream: bool = False,
+                 device="cpu"):
+        super().__init__(
+            api_url=api_url,
+            connector=connector,
+            base_dir=base_dir,
+            jobs_dir=jobs_dir,
+            engines_dir=engines_dir,
+            polling_interval=polling_interval,
+            cleanup_job_dir=cleanup_job_dir,
+            cleanup_old_engines=cleanup_old_engines,
+            download_engine_using_stream=download_engine_using_stream
+        )
+
+        self.device = device
+
     def process_job(self,
                     job: Job,
                     job_log_file_handler: logging.FileHandler,
@@ -91,11 +118,15 @@ class AnnoPageWorker(DocWorkerWrapper):
             "annopage",
             "--config", config_path,
             "--input-image-path", images_dir,
-            "--logging-level", logging.getLevelName(logger.getEffectiveLevel())
+            "--logging-level", logging.getLevelName(logger.getEffectiveLevel()),
+            "--device", self.device
         ]
 
         if job.alto_required:
             process_params += ["--input-alto-path", alto_dir]
+
+        if job.page_required:
+            process_params += ["--input-xml-path", page_xml_dir]
 
         if job.meta_json_required:
             process_params += ["--input-metadata-path", meta_file]
@@ -192,10 +223,22 @@ class AnnoPageWorker(DocWorkerWrapper):
 def main():
     args = parse_arguments()
 
+    if args.base_dir is not None:
+        os.makedirs(args.base_dir, exist_ok=True)
+
+    if args.jobs_dir is not None:
+        os.makedirs(args.jobs_dir, exist_ok=True)
+
+    if args.engines_dir is not None:
+        os.makedirs(args.engines_dir, exist_ok=True)
+
+    if args.log_file_path is not None:
+        os.makedirs(os.path.dirname(args.log_file_path), exist_ok=True)
+
     setup_logging(args.logging_level,
                   logging_format=args.logging_format,
                   logging_date_format=args.logging_date_format,
-                  log_files_path=args.log_files_path)
+                  log_file_path=args.log_file_path)
 
     connector = Connector(args.api_key, user_agent="AnnoPageWorker/1.0")
     logger.debug("Connector initialized.")
@@ -209,7 +252,8 @@ def main():
         polling_interval=args.polling_interval,
         cleanup_job_dir=args.cleanup_job_dir,
         cleanup_old_engines=args.cleanup_old_engines,
-        download_engine_using_stream=True
+        download_engine_using_stream=True,
+        device=args.device
     )
     logger.debug("AnnoPageWorker initialized.")
 
