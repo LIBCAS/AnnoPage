@@ -13,6 +13,7 @@ from shapely.geometry import Polygon
 from anno_page.core.utils import compose_path, config_get_list
 from anno_page.engines.base import LayoutProcessingEngine
 from anno_page.core.metadata import GraphicalObjectMetadata
+from anno_page.core.llm_api_aliases import get_llm_api_aliases
 
 
 class InitialRecognitionResult(BaseModel):
@@ -32,22 +33,18 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
         self.top_down_context_coefficient = 1.0
         self.left_right_context_coefficient = 1.0
 
+        llm_api_aliases = get_llm_api_aliases()
+        api = self.config["api"].lower()
+        if api in llm_api_aliases and "completions" in llm_api_aliases[api]:
+            self.api_url = llm_api_aliases[api]["completions"]
+        else:
+            self.api_url = api
+
         self.api_key = self.config.get("api_key", None)
         api_key_path = compose_path(self.api_key, self.config_path)
         if os.path.exists(api_key_path):
             with open(api_key_path, 'r') as f:
                 self.api_key = f.read().strip()
-
-        self.llm_service_url_aliases = {}
-        llm_service_url_aliases_path = self.config.get('llm_service_url_aliases', fallback=None)
-        if llm_service_url_aliases_path is not None:
-            self._load_llm_service_url_aliases(compose_path(llm_service_url_aliases_path, self.config_path))
-
-        api = self.config["api"].lower()
-        if api in self.llm_service_url_aliases and "completions" in self.llm_service_url_aliases[api]:
-            self.api_url = self.llm_service_url_aliases[api]["completions"]
-        else:
-            self.api_url = api
 
         prompt_settings_path = compose_path(config.get("prompt_settings"), self.config_path)
         with open(prompt_settings_path, 'r') as f:
@@ -55,14 +52,6 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
 
         self.prompt_model = self.prompt_settings["model"]
         self.prompt_text = self._normalize_category_names(self.prompt_settings["text"])
-
-    def _load_llm_service_url_aliases(self, path):
-        with open(path, 'r') as f:
-            url_aliases = json.load(f)
-
-        for url_alias in url_aliases:
-            for alias in url_alias["aliases"]:
-                self.llm_service_url_aliases[alias.lower()] = url_alias["urls"]
 
     @staticmethod
     def _normalize_category_names(prompt_text):
