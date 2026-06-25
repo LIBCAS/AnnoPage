@@ -17,6 +17,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = [
+    "pytest>=8",
+]
+
 client = [
     "doc-api@git+https://github.com/DCGM/DocAPI@f1e19e4bf9699736ed999bad6b7abf9205d25d42"
 ]
@@ -75,6 +79,9 @@ repository = "https://github.com/LIBCAS/AnnoPage"
 "anno_page.api" = "api"
 "anno_page.user_scripts" = "user_scripts"
 "anno_page.extra_api" = "extra_api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [project.scripts]
 annopage = "anno_page.user_scripts.parse_folder:main"

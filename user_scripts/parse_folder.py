@@ -14,7 +14,7 @@ from safe_gpu import safe_gpu
 from multiprocessing import Pool
 from pero_ocr.core.layout import PageLayout, ALTOVersion
 
-from anno_page.core.layout import render_to_image, add_page_layout_to_alto
+from anno_page.core.layout import render_to_image, add_page_layout_to_alto, set_handlers
 from anno_page.core.llm_api_aliases import load_llm_api_aliases
 from anno_page.core.page_parser import PageParser
 
@@ -203,6 +203,7 @@ class Computator:
             page_layout = self.page_parser.process_page(image, page_layout)
 
             if self.output_xml_path is not None:
+                set_handlers(page_layout)
                 page_layout.to_pagexml(os.path.join(self.output_xml_path, file_id + '.xml'))
 
             if self.output_alto_path is not None:
@@ -217,6 +218,7 @@ class Computator:
                         file.write(ET.tostring(alto, pretty_print=True, encoding="utf-8", xml_declaration=True).decode("utf-8"))
 
                 else:
+                    set_handlers(page_layout)
                     page_layout.to_altoxml(output_alto_path, version=ALTOVersion.ALTO_v4_4)
 
             if self.output_embeddings_path is not None:
