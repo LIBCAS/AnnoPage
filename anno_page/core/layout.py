@@ -103,7 +103,7 @@ def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_ve
 
     alto_add_processing_step(page_layout, description_element, alto_version)
 
-    print_space_coords = get_print_space_coords(page_layout, page_element)
+    print_space_coords = get_print_space_coords(page_layout, print_space_element)
 
     for region in page_layout.regions:
         if region.category in (None, "text"):
@@ -123,6 +123,11 @@ def get_print_space_coords(page_layout, print_space_element):
     print_space_width = print_space_element.attrib.get("WIDTH", 0)
     print_space_vpos = print_space_element.attrib.get("VPOS", page_layout.page_size[0])
     print_space_hpos = print_space_element.attrib.get("HPOS", page_layout.page_size[1])
+
+    print_space_height = int(print_space_height)
+    print_space_width = int(print_space_width)
+    print_space_vpos = int(print_space_vpos)
+    print_space_hpos = int(print_space_hpos)
 
     return print_space_height, print_space_width, print_space_vpos, print_space_hpos
 
