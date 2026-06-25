@@ -145,9 +145,9 @@ class RelatedLinesMetadata(BaseMetadata):
                 "tag": "StructureTag",
                 "type": "Functional",
                 "label": "FigureCaption",
-                "genre": "caption",
+                "genre": "figureCaption",
                 "genre_en": "caption",
-                "genre_cz": "popis",
+                "genre_cz": "popisek",
                 "related_item_type": "host"
             }
         else:
@@ -230,7 +230,7 @@ class GraphicalObjectMetadata(BaseMetadata):
                  record_identifier=None,
                  description: Optional[str| Dict[Language, str]] = None,
                  caption: Optional[str | Dict[Language, str]] = None,
-                 topics: Optional[str | Dict[Language, str]] = None,
+                 topics: Optional[str | Dict[Language, str] | Dict[Language, list[str]]] = None,
                  color: Optional[str | Dict[Language, str]] = None,
                  title: Optional[str | Dict[Language, str]] = None,
                  caption_lines_metadata: Optional[RelatedLinesMetadata] = None,
