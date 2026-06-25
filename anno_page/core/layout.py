@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from typing import Tuple
 
 from lxml import etree as ET
 from lxml.etree import Element
@@ -7,43 +8,60 @@ from pero_ocr.core.layout import RegionLayout, PageLayout, create_ocr_processing
 
 from anno_page import globals
 from anno_page.enums import Category
+from anno_page.core.metadata import GraphicalObjectMetadata
+from anno_page.core.utils import find_textline_by_geometry_and_content
 from anno_page.core.utils import find_textline
 
 
-def region_to_altoxml(region: RegionLayout, page_content_element):
-    category = Category.from_string(region.category)
+class AnnoPageRegionLayout(RegionLayout):
+    def to_altoxml(self, print_space_element, tags, mods_namespace, arabic_helper, min_line_confidence,
+                   print_space_coords: Tuple[int, int, int, int], version: ALTOVersion, word_splitters=["-"]) -> Tuple[int, int, int, int]:
+        category = Category.from_string(self.category)
+        page_element = get_page_element(print_space_element)
+        page_id = page_element.attrib["ID"]
 
-    page_element = page_content_element
+        composed_block_id = get_next_id(print_space_element, "ComposedBlock", prefix=f"{page_id}_CB", padding=4)
+        composed_block_element = ET.SubElement(print_space_element, "ComposedBlock")
+        composed_block_element.set("ID", composed_block_id)
+        composed_block_element.set("TYPE", str(category))
+
+        graphical_element_id = get_next_id(print_space_element, "GraphicalElement", prefix=f"{page_id}_GE", padding=4)
+        graphical_element = ET.SubElement(composed_block_element, "GraphicalElement")
+        graphical_element.set("ID", graphical_element_id)
+
+        bounding_box = self.get_polygon_bounding_box()
+        set_position_and_size(composed_block_element, bounding_box)
+        set_position_and_size(graphical_element, bounding_box)
+
+        x_min, y_min, x_max, y_max = bounding_box
+        block_height, block_width, block_vpos, block_hpos = y_max - y_min, x_max - x_min, y_min, x_min
+        print_space_height, print_space_width, print_space_vpos, print_space_hpos = print_space_coords
+
+        print_space_height = max([print_space_vpos + print_space_height, block_vpos + block_height])
+        print_space_width = max([print_space_hpos + print_space_width, block_hpos + block_width])
+        print_space_vpos = min([print_space_vpos, block_vpos])
+        print_space_hpos = min([print_space_hpos, block_hpos])
+        print_space_height = print_space_height - print_space_vpos
+        print_space_width = print_space_width - print_space_hpos
+
+        if self.graphical_metadata is not None:
+            self.graphical_metadata.to_altoxml(tags,
+                                               category=self.category,
+                                               bounding_box=bounding_box,
+                                               confidence=self.detection_confidence,
+                                               mods_namespace=mods_namespace)
+
+            composed_block_element.set("TAGREFS", self.graphical_metadata.tag_id)
+
+        return print_space_height, print_space_width, print_space_vpos, print_space_hpos
+
+
+def get_page_element(print_space_element):
+    page_element = print_space_element
     while not (page_element.tag == "Page" or page_element.tag.endswith("}Page")):
         page_element = page_element.getparent()
 
-    page_id = page_element.attrib["ID"]
-
-    composed_block_id = get_next_id(page_content_element, "ComposedBlock", prefix=f"{page_id}_CB", padding=4)
-    composed_block_element = ET.SubElement(page_content_element, "ComposedBlock")
-    composed_block_element.set("ID", composed_block_id)
-    composed_block_element.set("TYPE", str(category))
-
-    graphical_element_id = get_next_id(page_content_element, "GraphicalElement", prefix=f"{page_id}_GE", padding=4)
-    graphical_element = ET.SubElement(composed_block_element, "GraphicalElement")
-    graphical_element.set("ID", graphical_element_id)
-
-    bounding_box = region.get_polygon_bounding_box()
-    set_position_and_size(composed_block_element, bounding_box)
-    set_position_and_size(graphical_element, bounding_box)
-
-    if region.graphical_metadata is not None:
-        composed_block_element.set("TAGREFS", region.graphical_metadata.tag_id)
-
-        if region.graphical_metadata.continuing_line is not None:
-            text_line_element = page_content_element.find(f".//{{*}}TextLine[@ID='{region.graphical_metadata.continuing_line.id}']")
-            if text_line_element is not None:
-                string_element = text_line_element.find(".//{*}String")
-                if string_element is not None:
-                    string_element.attrib["SUBS_CONTENT"] = region.transcription + string_element.attrib["CONTENT"]
-                    string_element.attrib["SUBS_TYPE"] = "Abbreviation"
-
-    return composed_block_element
+    return page_element
 
 
 def get_next_id(parent_element, element_tag, prefix="", padding=4):
@@ -58,7 +76,6 @@ def get_next_id(parent_element, element_tag, prefix="", padding=4):
         new_id = f"{prefix}{str(index).zfill(padding)}"
 
     return new_id
-
 
 
 def set_position_and_size(block, bounding_box):
@@ -79,10 +96,130 @@ def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_ve
         mods_namespace = "http://www.loc.gov/mods/v3"
         namespaces["mods"] = mods_namespace
 
-    description_element = alto_root.find("Description", namespaces)
-    if description_element is None:
-        description_element = ET.SubElement(alto_root, "Description")
+    description_element = find_or_create_element(alto_root, "Description", namespaces)
+    tags_element = find_or_create_element(alto_root, "Tags", namespaces)
+    layout_element = find_or_create_element(alto_root, "Layout", namespaces)
+    page_element = find_or_create_element(layout_element, "Page", namespaces)
+    print_space_element = find_or_create_element(page_element, "PrintSpace", namespaces)
 
+    alto_add_processing_step(page_layout, description_element, alto_version)
+
+    print_space_coords = get_print_space_coords(page_layout, print_space_element)
+
+    for region in page_layout.regions:
+        if region.category in (None, "text"):
+            continue
+
+        print_space_coords = region.to_altoxml(print_space_element, tags_element, mods_namespace, None, 0.0, print_space_coords, alto_version)
+
+    update_print_space_and_margins(page_layout, page_element, print_space_coords)
+
+    alto_postprocess_lines(page_layout, print_space_element, alto_version)
+
+    return alto_root
+
+
+def get_print_space_coords(page_layout, print_space_element):
+    print_space_height = print_space_element.attrib.get("HEIGHT", 0)
+    print_space_width = print_space_element.attrib.get("WIDTH", 0)
+    print_space_vpos = print_space_element.attrib.get("VPOS", page_layout.page_size[0])
+    print_space_hpos = print_space_element.attrib.get("HPOS", page_layout.page_size[1])
+
+    print_space_height = int(print_space_height)
+    print_space_width = int(print_space_width)
+    print_space_vpos = int(print_space_vpos)
+    print_space_hpos = int(print_space_hpos)
+
+    return print_space_height, print_space_width, print_space_vpos, print_space_hpos
+
+
+def update_print_space_and_margins(page_layout, page_element, print_space_coords):
+    print_space_height, print_space_width, print_space_vpos, print_space_hpos = print_space_coords
+
+    top_margin = find_or_create_element(page_element, "TopMargin")
+    left_margin = find_or_create_element(page_element, "LeftMargin")
+    right_margin = find_or_create_element(page_element, "RightMargin")
+    bottom_margin = find_or_create_element(page_element, "BottomMargin")
+    print_space = find_or_create_element(page_element, "PrintSpace")
+
+    top_margin.set("HEIGHT", "{}".format(int(print_space_vpos)))
+    top_margin.set("WIDTH", "{}".format(int(page_layout.page_size[1])))
+    top_margin.set("VPOS", "0")
+    top_margin.set("HPOS", "0")
+
+    left_margin.set("HEIGHT", "{}".format(int(page_layout.page_size[0])))
+    left_margin.set("WIDTH", "{}".format(int(print_space_hpos)))
+    left_margin.set("VPOS", "0")
+    left_margin.set("HPOS", "0")
+
+    right_margin.set("HEIGHT", "{}".format(int(page_layout.page_size[0])))
+    right_margin.set("WIDTH", "{}".format(int(page_layout.page_size[1] - (print_space_hpos + print_space_width))))
+    right_margin.set("VPOS", "0")
+    right_margin.set("HPOS", "{}".format(int(print_space_hpos + print_space_width)))
+
+    bottom_margin.set("HEIGHT", "{}".format(int(page_layout.page_size[0] - (print_space_vpos + print_space_height))))
+    bottom_margin.set("WIDTH", "{}".format(int(page_layout.page_size[1])))
+    bottom_margin.set("VPOS", "{}".format(int(print_space_vpos + print_space_height)))
+    bottom_margin.set("HPOS", "0")
+
+    print_space.set("HEIGHT", str(int(print_space_height)))
+    print_space.set("WIDTH", str(int(print_space_width)))
+    print_space.set("VPOS", str(int(print_space_vpos)))
+    print_space.set("HPOS", str(int(print_space_hpos)))
+
+
+def find_or_create_element(parent_element, tag, namespaces=None):
+    if namespaces is None:
+        namespaces = parent_element.nsmap
+
+    element = parent_element.find(tag, namespaces)
+    if element is None:
+        element = ET.SubElement(parent_element, tag)
+
+    return element
+
+
+def alto_postprocess_lines(page_layout, print_space_element, alto_version=ALTOVersion.ALTO_v4_4):
+    for region in page_layout.regions:
+        if region.category in (None, "text"):
+            continue
+
+        if region.graphical_metadata is not None:
+            metadata: GraphicalObjectMetadata = region.graphical_metadata
+            if metadata.caption_lines_metadata is not None:
+                for line in metadata.caption_lines_metadata.lines:
+                    line_id = line.id
+                    if not line_id.startswith("line_"):
+                        line_id = f"line_{line_id}"
+
+                    line_element = print_space_element.find(f".//TextLine[@ID='{line_id}']")
+
+                    if line_element is None:
+                        continue
+
+                    current_tag_refs = line_element.attrib["TAGREFS"] if "TAGREFS" in line_element.attrib else None
+                    if current_tag_refs is not None:
+                        current_tag_refs = set(current_tag_refs.split())
+                    else:
+                        current_tag_refs = set()
+
+                    current_tag_refs.add(metadata.caption_lines_metadata.tag_id)
+                    line_element.set("TAGREFS", " ".join(current_tag_refs))
+
+            if metadata.continuing_line is not None:
+                line_id = metadata.continuing_line.id
+                if not line_id.startswith("line_"):
+                    line_id = f"line_{line_id}"
+
+                line_element = print_space_element.find(f".//{{*}}TextLine[@ID='{line_id}']")
+                if line_element is not None:
+                    string_element = line_element.find(".//{*}String")
+                    if string_element is not None:
+                        string_element.attrib["SUBS_CONTENT"] = region.transcription + string_element.attrib["CONTENT"]
+                        string_element.attrib["SUBS_TYPE"] = "Abbreviation"
+
+
+def alto_add_processing_step(page_layout, description_element: ET.Element, alto_version=ALTOVersion.ALTO_v4_4):
     processing_element = create_ocr_processing_element(id=globals.software_name,
                                                        software_creator_str=globals.software_creator,
                                                        software_name_str=globals.software_name,
@@ -91,49 +228,10 @@ def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_ve
 
     description_element.append(processing_element)
 
-    tags_element = alto_root.find("Tags", namespaces)
-    if tags_element is None:
-        tags_element = ET.SubElement(alto_root, "Tags")
 
-    layout_element = alto_root.find("Layout", namespaces)
-    if layout_element is None:
-        layout_element = ET.SubElement(alto_root, "Layout")
-
-    page_element = layout_element.find("Page", namespaces)
-    if page_element is None:
-        page_element = ET.SubElement(layout_element, "Page")
-
-    print_space_element = page_element.find("PrintSpace", namespaces)
-    if print_space_element is None:
-        print_space_element = ET.SubElement(page_element, "PrintSpace")
-
-    for region in page_layout.regions:
-        if region.category in (None, "text"):
-            continue
-
-        region_to_altoxml(region, print_space_element)
-        if region.graphical_metadata is not None:
-            region.graphical_metadata.to_altoxml(tags_element,
-                                                 category=region.category,
-                                                 bounding_box=region.get_polygon_bounding_box(),
-                                                 confidence=region.detection_confidence,
-                                                 mods_namespace=mods_namespace)
-
-    for line in page_layout.lines_iterator([None, 'text']):
-        if line.graphical_metadata is not None:
-            tag_refs = set([metadata.tag_id for metadata in line.graphical_metadata])
-
-            text_line_element = find_textline(print_space_element, line, namespaces)
-
-            if text_line_element is not None:
-                current_tagrefs = text_line_element.attrib["TAGREFS"] if "TAGREFS" in text_line_element.attrib else None
-                if current_tagrefs:
-                    existing_tagrefs = set(current_tagrefs.split(' '))
-                    tag_refs = tag_refs.union(existing_tagrefs)
-
-                text_line_element.set("TAGREFS", ' '.join(tag_refs))
-
-    return alto_root
+def set_handlers(page_layout):
+    page_layout.to_altoxml_processing_added += alto_add_processing_step
+    page_layout.to_altoxml_regions_ended += alto_postprocess_lines
 
 
 def render_to_image(image, page_layout):

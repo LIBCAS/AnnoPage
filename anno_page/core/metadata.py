@@ -1,23 +1,23 @@
-import uuid
 import logging
 from typing import Optional, Dict, List
 from lxml import etree as ET
-from datetime import datetime
 
 from pero_ocr.core.layout import TextLine
 
 from anno_page import globals
 from anno_page.enums import Category, Language, LineRelation
 from anno_page.enums.language import language_to_string_mapping, language_to_string_mapping_reversed
+from anno_page.core.services import UuidService, DateTimeService
 
 logger = logging.getLogger(__name__)
 
 
 class BaseMetadata:
-    def __init__(self, tag_id, mods_id, mods_uuid=None):
+    def __init__(self, tag_id, mods_id, mods_uuid=None, record_identifier=None):
         self.tag_id = tag_id
         self.mods_id = mods_id
-        self.mods_uuid = uuid.uuid4() if mods_uuid is None else mods_uuid
+        self.mods_uuid = str(UuidService.generate_uuid()) if mods_uuid is None else mods_uuid
+        self.record_identifier = str(UuidService.generate_uuid()) if record_identifier is None else record_identifier
 
     @staticmethod
     def _add_genre_element(mods, mods_namespace, language, content, genre_type=None):
@@ -68,11 +68,11 @@ class BaseMetadata:
         identifier.attrib["type"] = identifier_type
 
     @staticmethod
-    def _add_record_info_element(mods, mods_namespace, confidence=None):
+    def _add_record_info_element(mods, mods_namespace, creation_date_time, record_identifier, confidence=None):
         record_info = ET.SubElement(mods, f"{{{mods_namespace}}}recordInfo")
 
         record_creation_date = ET.SubElement(record_info, f"{{{mods_namespace}}}recordCreationDate")
-        record_creation_date.text = datetime.now().isoformat(timespec='seconds')
+        record_creation_date.text = creation_date_time
 
         record_content_source = ET.SubElement(record_info, f"{{{mods_namespace}}}recordContentSource")
         record_content_source.text = globals.software_fullname
@@ -88,9 +88,9 @@ class BaseMetadata:
             record_info_note.attrib["type"] = "confidence"
             record_info_note.text = f"{confidence:.3f}"
 
-        record_identifier = ET.SubElement(record_info, f"{{{mods_namespace}}}recordIdentifier")
-        record_identifier.attrib["source"] = globals.software_name
-        record_identifier.text = f"uuid:{uuid.uuid4()}"
+        record_identifier_element = ET.SubElement(record_info, f"{{{mods_namespace}}}recordIdentifier")
+        record_identifier_element.attrib["source"] = globals.software_name
+        record_identifier_element.text = f"uuid:{record_identifier}"
 
         language_of_cataloging = ET.SubElement(record_info, f"{{{mods_namespace}}}languageOfCataloging")
 
@@ -121,14 +121,15 @@ class RelatedLinesMetadata(BaseMetadata):
                  relation: LineRelation,
                  description: Optional[str] = None,
                  title: Optional[str | Dict[Language, str]] = None,
-                 mods_uuid=None):
-        super().__init__(tag_id, mods_id, mods_uuid)
+                 mods_uuid=None,
+                 record_identifier=None):
+        super().__init__(tag_id, mods_id, mods_uuid, record_identifier)
         self.lines = lines
         self.relation = relation
         self.description = description
         self.title = title
 
-    def to_altoxml(self, tags, mods_namespace, confidence, related_mods_id=None):
+    def to_altoxml(self, tags, mods_namespace, confidence, related_mods_id=None, creation_date_time=None):
         if self.relation == LineRelation.REFERENCE:
             values = {
                 "tag": "OtherTag",
@@ -144,9 +145,9 @@ class RelatedLinesMetadata(BaseMetadata):
                 "tag": "StructureTag",
                 "type": "Functional",
                 "label": "FigureCaption",
-                "genre": "caption",
+                "genre": "figureCaption",
                 "genre_en": "caption",
-                "genre_cz": "popis",
+                "genre_cz": "popisek",
                 "related_item_type": "host"
             }
         else:
@@ -179,7 +180,14 @@ class RelatedLinesMetadata(BaseMetadata):
         if related_mods_id is not None:
             self._add_related_item_element(mods, mods_namespace, values["related_item_type"], related_mods_id)
 
-        self._add_record_info_element(mods, mods_namespace, confidence=confidence)
+        if creation_date_time is None:
+            creation_date_time = DateTimeService.get_datetime_now().isoformat(timespec='seconds')
+
+        self._add_record_info_element(mods,
+                                      mods_namespace,
+                                      creation_date_time=creation_date_time,
+                                      record_identifier=self.record_identifier,
+                                      confidence=confidence)
 
     def to_dict(self) -> dict:
         result = super().to_dict()
@@ -219,17 +227,18 @@ class GraphicalObjectMetadata(BaseMetadata):
                  tag_id,
                  mods_id,
                  mods_uuid=None,
+                 record_identifier=None,
                  tag_description: Optional[str] = None,
                  description: Optional[str| Dict[Language, str]] = None,
                  caption: Optional[str | Dict[Language, str]] = None,
-                 topics: Optional[str | Dict[Language, str]] = None,
+                 topics: Optional[str | Dict[Language, str] | Dict[Language, list[str]]] = None,
                  color: Optional[str | Dict[Language, str]] = None,
                  title: Optional[str | Dict[Language, str]] = None,
                  caption_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  reference_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  continuing_line: Optional[TextLine] = None,
                  prompts: Optional[List[str]] = None):
-        super().__init__(tag_id, mods_id, mods_uuid)
+        super().__init__(tag_id, mods_id, mods_uuid, record_identifier)
         self.tag_description = tag_description
         self.caption = caption
         self.topics = topics
@@ -282,7 +291,7 @@ class GraphicalObjectMetadata(BaseMetadata):
         if self.reference_lines_metadata is not None:
             self.reference_lines_metadata.to_altoxml(tags, mods_namespace, confidence, self.mods_id)
 
-    def graphics_to_altoxml(self, tags, mods_namespace, category, bounding_box, confidence):
+    def graphics_to_altoxml(self, tags, mods_namespace, category, bounding_box, confidence, creation_date_time=None):
         layout_tag = ET.SubElement(tags, "LayoutTag")
         xml_data = ET.SubElement(layout_tag, "XmlData")
         mods = ET.SubElement(xml_data, f"{{{mods_namespace}}}mods")
@@ -333,7 +342,14 @@ class GraphicalObjectMetadata(BaseMetadata):
         if self.reference_lines_metadata is not None:
             self._add_related_item_element(mods, mods_namespace, "references", self.reference_lines_metadata.mods_id)
 
-        self._add_record_info_element(mods, mods_namespace, confidence)
+        if creation_date_time is None:
+            creation_date_time = DateTimeService.get_datetime_now().isoformat(timespec='seconds')
+
+        self._add_record_info_element(mods,
+                                      mods_namespace,
+                                      creation_date_time=creation_date_time,
+                                      record_identifier=self.record_identifier,
+                                      confidence=confidence)
 
     @staticmethod
     def _add_size_element(mods, mods_namespace, bounding_box):
