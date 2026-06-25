@@ -14,8 +14,8 @@ from multiprocessing import Pool
 from urllib.parse import urljoin
 
 from anno_page.core.utils import compose_path, config_get_list
+from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata, ColorInfo
 from anno_page.core.llm_api_aliases import get_llm_api_aliases
-from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata
 from anno_page.engines import BaseEngine, LayoutProcessingEngine
 from anno_page.engines.detection import YoloDetector
 from anno_page.enums import Language, LineRelation
@@ -404,8 +404,8 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
             }
 
             metadata.color = {
-                Language.ENGLISH: item.result.color_en,
-                Language.CZECH: item.result.color_cz
+                Language.ENGLISH: ColorInfo(color_mode=item.result.color_en),
+                Language.CZECH: ColorInfo(color_mode=item.result.color_cz)
             }
 
             if metadata.prompts is None:

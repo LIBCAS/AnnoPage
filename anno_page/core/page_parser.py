@@ -4,7 +4,7 @@ import logging
 
 from anno_page.engines import (LayoutProcessingEngine, YoloDetectionEngine, HuggingfaceImageEmbeddingEngine,
                                OpenAICompletionsImageCaptioningEngine, CaptionYoloNearestEngine,
-                               CaptionYoloKeypointsEngine, CaptionYoloOrganizerEngine)
+                               CaptionYoloKeypointsEngine, CaptionYoloOrganizerEngine, DominantColorsEngine)
 
 
 def operation_factory(config, device, config_path) -> LayoutProcessingEngine | None:
@@ -24,6 +24,9 @@ def operation_factory(config, device, config_path) -> LayoutProcessingEngine | N
     elif config['METHOD'] == 'OPENAI_COMPLETIONS_IMAGE_CAPTIONING':
         logger.info("Creating OpenAICompletionsImageCaptioning engine")
         engine = OpenAICompletionsImageCaptioningEngine(config, device, config_path=config_path)
+    elif config['METHOD'] == 'DOMINANT_COLORS':
+        logger.info("Creating DominantColorsEngine engine")
+        engine = DominantColorsEngine(config, device, config_path=config_path)
     elif config['METHOD'] == 'CAPTION_YOLO_NEAREST':
         logger.info("Creating CaptionYoloNearestEngine engine")
         engine = CaptionYoloNearestEngine(config, device, config_path=config_path)

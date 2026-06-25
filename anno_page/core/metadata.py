@@ -12,6 +12,18 @@ from anno_page.core.services import UuidService, DateTimeService
 logger = logging.getLogger(__name__)
 
 
+class DominantColorInfo:
+    def __init__(self, name, coverage):
+        self.name = name
+        self.coverage = coverage
+
+
+class ColorInfo:
+    def __init__(self, color_mode:str|None=None, dominant_colors:List[DominantColorInfo]|None=None):
+        self.color_mode = color_mode
+        self.dominant_colors = dominant_colors
+
+
 class BaseMetadata:
     def __init__(self, tag_id, mods_id, mods_uuid=None, record_identifier=None):
         self.tag_id = tag_id
@@ -231,7 +243,7 @@ class GraphicalObjectMetadata(BaseMetadata):
                  description: Optional[str| Dict[Language, str]] = None,
                  caption: Optional[str | Dict[Language, str]] = None,
                  topics: Optional[str | Dict[Language, str] | Dict[Language, list[str]]] = None,
-                 color: Optional[str | Dict[Language, str]] = None,
+                 color: Optional[ColorInfo | Dict[Language, ColorInfo]] = None,
                  title: Optional[str | Dict[Language, str]] = None,
                  caption_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  reference_lines_metadata: Optional[RelatedLinesMetadata] = None,
@@ -356,7 +368,7 @@ class GraphicalObjectMetadata(BaseMetadata):
         extent.attrib["unit"] = "pixels"
 
     def _add_color_elements(self, mods, mods_namespace):
-        if isinstance(self.color, str):
+        if isinstance(self.color, ColorInfo):
             self._add_color_element(mods, mods_namespace, "", self.color)
         elif isinstance(self.color, dict):
             for language, color in self.color.items():
@@ -366,13 +378,22 @@ class GraphicalObjectMetadata(BaseMetadata):
             logger.warning(f"Color is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
 
     @staticmethod
-    def _add_color_element(mods, mods_namespace, language, color):
+    def _add_color_element(mods, mods_namespace, language, color_info: ColorInfo):
         physical_description = ET.SubElement(mods, f"{{{mods_namespace}}}physicalDescription")
         physical_description.attrib["altRepGroup"] = "color-1"
-        form = ET.SubElement(physical_description, f"{{{mods_namespace}}}form")
-        form.attrib["type"] = "color"
-        form.attrib["lang"] = language
-        form.text = color
+
+        form_color_mode = ET.SubElement(physical_description, f"{{{mods_namespace}}}form")
+        form_color_mode.attrib["type"] = "color"
+        form_color_mode.attrib["lang"] = language
+        form_color_mode.text = color_info.color_mode
+
+        if color_info.dominant_colors is not None:
+            for dominant_color in color_info.dominant_colors:
+                form_dominant_color = ET.SubElement(physical_description, f"{{{mods_namespace}}}form")
+                form_dominant_color.attrib["type"] = "dominant-color"
+                form_dominant_color.attrib["lang"] = language
+                form_dominant_color.attrib["coverage"] = f"{dominant_color.coverage:.2f}"
+                form_dominant_color.text = dominant_color.name
 
     def _add_caption_elements(self, mods, mods_namespace):
         if isinstance(self.caption, str):
