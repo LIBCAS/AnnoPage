@@ -1,9 +1,9 @@
 import numpy as np
 
 from ultralytics import YOLO
-from pero_ocr.core.layout import RegionLayout
 
 from anno_page.core.utils import compose_path, config_get_list
+from anno_page.core.layout import AnnoPageRegionLayout as RegionLayout
 from anno_page.core.metadata import GraphicalObjectMetadata
 from anno_page.core.services import UuidService
 from anno_page.engines import LayoutProcessingEngine
