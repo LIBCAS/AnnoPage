@@ -15,6 +15,7 @@ from multiprocessing import Pool
 from pero_ocr.core.layout import PageLayout, ALTOVersion
 
 from anno_page.core.layout import render_to_image, add_page_layout_to_alto, set_handlers
+from anno_page.core.llm_api_aliases import load_llm_api_aliases
 from anno_page.core.page_parser import PageParser
 
 
@@ -37,6 +38,8 @@ def parse_arguments():
     parser.add_argument("--output-embeddings-path", help="Path to directory where embeddings will be saved.")
     parser.add_argument("--embeddings-jsonlines", action='store_true', help="If set, the embedding output is saved in JSON Lines format instead of a single JSON array.")
     parser.add_argument('-s', '--skip-processed', action='store_true', required=False, help='If set, already processed files are skipped.')
+
+    parser.add_argument("--llm-api-aliases-path", help="Path to JSON file with LLM API aliases.", required=False, default=None)
 
     parser.add_argument("--device", choices=["gpu", "cpu"], default="gpu")
     parser.add_argument("--gpu-id", type=int, default=None, help="If set, the computation runs of the specified GPU, otherwise safe-gpu is used to allocate first unused GPU.")
@@ -326,6 +329,9 @@ def main():
         config['PARSE_FOLDER']['OUTPUT_IMAGE_CAPTIONING_PROMPTS_PATH'] = args.output_image_captioning_prompts_path
 
     device = get_device(args.device, args.gpu_id, logger)
+
+    if args.llm_api_aliases_path is not None:
+        load_llm_api_aliases(args.llm_api_aliases_path, reload=True)
 
     page_parser = PageParser(config, config_path=os.path.dirname(config_path), device=device)
 
