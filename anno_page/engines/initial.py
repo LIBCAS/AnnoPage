@@ -170,8 +170,6 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
         x_min, y_min, x_max, y_max = region_bbox
         width = x_max - x_min
 
-
-
         target_top = y_min - median_line_height * self.top_down_target_coefficient
         target_bottom = y_max + median_line_height * self.top_down_target_coefficient
         target_left = x_min + width / 2
