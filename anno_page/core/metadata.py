@@ -228,6 +228,7 @@ class GraphicalObjectMetadata(BaseMetadata):
                  mods_id,
                  mods_uuid=None,
                  record_identifier=None,
+                 tag_description: Optional[str] = None,
                  description: Optional[str| Dict[Language, str]] = None,
                  caption: Optional[str | Dict[Language, str]] = None,
                  topics: Optional[str | Dict[Language, str] | Dict[Language, list[str]]] = None,
@@ -235,13 +236,16 @@ class GraphicalObjectMetadata(BaseMetadata):
                  title: Optional[str | Dict[Language, str]] = None,
                  caption_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  reference_lines_metadata: Optional[RelatedLinesMetadata] = None,
+                 continuing_line: Optional[TextLine] = None,
                  prompts: Optional[List[str]] = None):
         super().__init__(tag_id, mods_id, mods_uuid, record_identifier)
+        self.tag_description = tag_description
         self.caption = caption
         self.topics = topics
         self.color = color
         self.description = description
         self.title = title
+        self.continuing_line = continuing_line
         self.prompts = prompts
 
         self.caption_lines_metadata = caption_lines_metadata
@@ -302,6 +306,9 @@ class GraphicalObjectMetadata(BaseMetadata):
         layout_tag.set("ID", self.tag_id)
         layout_tag.set("TYPE", "Structural")
         layout_tag.set("LABEL", category_en)
+
+        if self.tag_description is not None:
+            layout_tag.set("DESCRIPTION", self.tag_description)
 
         if self.title is not None:
             self._add_title_element(mods, mods_namespace, title=self.title)

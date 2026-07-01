@@ -10,6 +10,7 @@ from anno_page import globals
 from anno_page.enums import Category
 from anno_page.core.metadata import GraphicalObjectMetadata
 from anno_page.core.utils import find_textline_by_geometry_and_content
+from anno_page.core.utils import find_textline
 
 
 class AnnoPageRegionLayout(RegionLayout):
@@ -187,7 +188,11 @@ def alto_postprocess_lines(page_layout, print_space_element, alto_version=ALTOVe
             metadata: GraphicalObjectMetadata = region.graphical_metadata
             if metadata.caption_lines_metadata is not None:
                 for line in metadata.caption_lines_metadata.lines:
-                    line_element = print_space_element.find(f".//TextLine[@ID='line_{line.id}']")
+                    line_id = line.id
+                    if not line_id.startswith("line_"):
+                        line_id = f"line_{line_id}"
+
+                    line_element = print_space_element.find(f".//TextLine[@ID='{line_id}']")
 
                     if line_element is None:
                         continue
@@ -200,6 +205,18 @@ def alto_postprocess_lines(page_layout, print_space_element, alto_version=ALTOVe
 
                     current_tag_refs.add(metadata.caption_lines_metadata.tag_id)
                     line_element.set("TAGREFS", " ".join(current_tag_refs))
+
+            if metadata.continuing_line is not None:
+                line_id = metadata.continuing_line.id
+                if not line_id.startswith("line_"):
+                    line_id = f"line_{line_id}"
+
+                line_element = print_space_element.find(f".//{{*}}TextLine[@ID='{line_id}']")
+                if line_element is not None:
+                    string_element = line_element.find(".//{*}String")
+                    if string_element is not None:
+                        string_element.attrib["SUBS_CONTENT"] = region.transcription + string_element.attrib["CONTENT"]
+                        string_element.attrib["SUBS_TYPE"] = "Abbreviation"
 
 
 def alto_add_processing_step(page_layout, description_element: ET.Element, alto_version=ALTOVersion.ALTO_v4_4):

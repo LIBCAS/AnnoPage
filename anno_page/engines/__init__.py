@@ -4,3 +4,4 @@ from .captioning import (CaptionYoloNearestEngine, CaptionYoloOrganizerEngine, C
 from .detection import YoloDetectionEngine
 from .embedding import HuggingfaceTextEmbeddingEngine, HuggingfaceImageEmbeddingEngine
 from .translation import TranslationEngine
+from .initial import InitialRecognitionEngine
