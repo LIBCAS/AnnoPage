@@ -13,11 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 class BaseMetadata:
-    def __init__(self, tag_id, mods_id, mods_uuid=None, record_identifier=None):
+    def __init__(self, tag_id, mods_id, mods_uuid=None, record_identifier=None, used_ai_models=None):
         self.tag_id = tag_id
         self.mods_id = mods_id
         self.mods_uuid = str(UuidService.generate_uuid()) if mods_uuid is None else mods_uuid
         self.record_identifier = str(UuidService.generate_uuid()) if record_identifier is None else record_identifier
+        self.used_ai_models = used_ai_models if used_ai_models is not None else {}
 
     @staticmethod
     def _add_genre_element(mods, mods_namespace, language, content, genre_type=None):
@@ -68,7 +69,7 @@ class BaseMetadata:
         identifier.attrib["type"] = identifier_type
 
     @staticmethod
-    def _add_record_info_element(mods, mods_namespace, creation_date_time, record_identifier, confidence=None):
+    def _add_record_info_element(mods, mods_namespace, creation_date_time, record_identifier, confidence=None, used_ai_models=None):
         record_info = ET.SubElement(mods, f"{{{mods_namespace}}}recordInfo")
 
         record_creation_date = ET.SubElement(record_info, f"{{{mods_namespace}}}recordCreationDate")
@@ -87,6 +88,12 @@ class BaseMetadata:
             record_info_note = ET.SubElement(record_info, f"{{{mods_namespace}}}recordInfoNote")
             record_info_note.attrib["type"] = "confidence"
             record_info_note.text = f"{confidence:.3f}"
+
+        if used_ai_models is not None:
+            for model_type, model_name in used_ai_models.items():
+                record_info_note = ET.SubElement(record_info, f"{{{mods_namespace}}}recordInfoNote")
+                record_info_note.attrib["type"] = str(model_type)
+                record_info_note.text = model_name
 
         record_identifier_element = ET.SubElement(record_info, f"{{{mods_namespace}}}recordIdentifier")
         record_identifier_element.attrib["source"] = globals.software_name
@@ -122,8 +129,9 @@ class RelatedLinesMetadata(BaseMetadata):
                  description: Optional[str] = None,
                  title: Optional[str | Dict[Language, str]] = None,
                  mods_uuid=None,
-                 record_identifier=None):
-        super().__init__(tag_id, mods_id, mods_uuid, record_identifier)
+                 record_identifier=None,
+                 used_ai_models: Optional[Dict[str, str]] = None):
+        super().__init__(tag_id, mods_id, mods_uuid, record_identifier, used_ai_models)
         self.lines = lines
         self.relation = relation
         self.description = description
@@ -187,7 +195,8 @@ class RelatedLinesMetadata(BaseMetadata):
                                       mods_namespace,
                                       creation_date_time=creation_date_time,
                                       record_identifier=self.record_identifier,
-                                      confidence=confidence)
+                                      confidence=confidence,
+                                      used_ai_models=self.used_ai_models)
 
     def to_dict(self) -> dict:
         result = super().to_dict()
@@ -237,8 +246,9 @@ class GraphicalObjectMetadata(BaseMetadata):
                  caption_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  reference_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  continuing_line: Optional[TextLine] = None,
-                 prompts: Optional[List[str]] = None):
-        super().__init__(tag_id, mods_id, mods_uuid, record_identifier)
+                 prompts: Optional[List[str]] = None,
+                 used_ai_models: Optional[Dict[str, str]] = None):
+        super().__init__(tag_id, mods_id, mods_uuid, record_identifier, used_ai_models)
         self.tag_description = tag_description
         self.caption = caption
         self.topics = topics
@@ -349,7 +359,8 @@ class GraphicalObjectMetadata(BaseMetadata):
                                       mods_namespace,
                                       creation_date_time=creation_date_time,
                                       record_identifier=self.record_identifier,
-                                      confidence=confidence)
+                                      confidence=confidence,
+                                      used_ai_models=self.used_ai_models)
 
     @staticmethod
     def _add_size_element(mods, mods_namespace, bounding_box):
