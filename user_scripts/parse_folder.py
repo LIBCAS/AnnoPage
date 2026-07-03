@@ -35,6 +35,7 @@ def parse_arguments():
     parser.add_argument("--output-render-path", help="Path to directory where rendered images will be saved.")
     parser.add_argument("--output-crops-path", help="Path to directory where region crops will be saved.")
     parser.add_argument("--output-image-captioning-prompts-path", help="Path to directory where image captioning prompts will be saved.")
+    parser.add_argument("--output-processing-info-path", help="Path to JSON file where processing info will be saved.")
     parser.add_argument("--output-embeddings-path", help="Path to directory where embeddings will be saved.")
     parser.add_argument("--embeddings-jsonlines", action='store_true', help="If set, the embedding output is saved in JSON Lines format instead of a single JSON array.")
     parser.add_argument('-s', '--skip-processed', action='store_true', required=False, help='If set, already processed files are skipped.')
@@ -126,6 +127,68 @@ def load_already_processed_files(directories):
     return already_processed
 
 
+def summarize_processing_info(processing_info):
+    total_summary = {}
+    per_engine_summary = {}
+    per_page_summary = {}
+    per_element_summary = {}
+
+    for page_id, page_info in processing_info.items():
+        for engine_name, engine_info in page_info.items():
+            for element_id, element_info in engine_info.items():
+                full_element_id = f"{page_id}_{element_id}"
+
+                # Update total summary
+                for key, value in element_info.items():
+                    if key not in total_summary:
+                        total_summary[key] = 0
+                    total_summary[key] += value
+
+                # Update per engine summary
+                if engine_name not in per_engine_summary:
+                    per_engine_summary[engine_name] = {}
+
+                for key, value in element_info.items():
+                    if key not in per_engine_summary[engine_name]:
+                        per_engine_summary[engine_name][key] = 0
+                    per_engine_summary[engine_name][key] += value
+
+                # Update per page summary
+                if page_id not in per_page_summary:
+                    per_page_summary[page_id] = {}
+
+                for key, value in element_info.items():
+                    if key not in per_page_summary[page_id]:
+                        per_page_summary[page_id][key] = 0
+                    per_page_summary[page_id][key] += value
+
+                # Update per element summary
+                if full_element_id not in per_element_summary:
+                    per_element_summary[full_element_id] = {}
+
+                for key, value in element_info.items():
+                    if key not in per_element_summary[full_element_id]:
+                        per_element_summary[full_element_id][key] = 0
+                    per_element_summary[full_element_id][key] += value
+
+    result = {
+        "summary": {
+            "total": total_summary,
+            "per_engine": per_engine_summary,
+            "per_page": per_page_summary,
+            "per_element": per_element_summary
+        },
+        "data": processing_info
+    }
+
+    return result
+
+
+def save_processing_info(processing_info, output_processing_info_path):
+    with open(output_processing_info_path, 'w', encoding='utf-8') as file:
+        json.dump(processing_info, file, ensure_ascii=False, indent=4)
+
+
 class Computator:
     def __init__(self,
                  page_parser,
@@ -152,6 +215,8 @@ class Computator:
         self.embeddings_jsonlines = embeddings_jsonlines
 
         self.logger = logging.getLogger(self.__class__.__name__)
+
+        self.processing_info = {}
 
     def __call__(self, image_file_name, file_id, index, ids_count, file_metadata=None):
         self.logger.info(f"Processing {file_id}")
@@ -200,7 +265,10 @@ class Computator:
                     self.logger.info(f"Resized image to page size: ({page_width}, {page_height}).")
 
             page_layout.metadata["anno_page_metadata"] = file_metadata
+            page_layout.metadata["anno_page_processing"] = {}
             page_layout = self.page_parser.process_page(image, page_layout)
+
+            self.processing_info[file_id] = page_layout.metadata["anno_page_processing"]
 
             if self.output_xml_path is not None:
                 set_handlers(page_layout)
@@ -328,6 +396,9 @@ def main():
     if args.output_image_captioning_prompts_path is not None:
         config['PARSE_FOLDER']['OUTPUT_IMAGE_CAPTIONING_PROMPTS_PATH'] = args.output_image_captioning_prompts_path
 
+    if args.output_processing_info_path is not None:
+        config['PARSE_FOLDER']['OUTPUT_PROCESSING_INFO_PATH'] = args.output_processing_info_path
+
     device = get_device(args.device, args.gpu_id, logger)
 
     if args.llm_api_aliases_path is not None:
@@ -345,6 +416,7 @@ def main():
     output_render_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_RENDER_PATH')
     output_crops_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_CROPS_PATH')
     output_image_captioning_prompts_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_IMAGE_CAPTIONING_PROMPTS_PATH')
+    output_processing_info_path = get_value_or_none(config, 'PARSE_FOLDER', 'OUTPUT_PROCESSING_INFO_PATH')
 
     embeddings_jsonlines = args.embeddings_jsonlines
 
@@ -414,6 +486,10 @@ def main():
         for index, (file_id, image_file_name) in enumerate(zip(ids_to_process, images_to_process)):
             file_metadata = files_metadata.get(image_file_name, None)
             results.append(computator(image_file_name, file_id, index, len(ids_to_process), file_metadata))
+
+    if output_processing_info_path is not None:
+        processing_info = summarize_processing_info(computator.processing_info)
+        save_processing_info(processing_info, output_processing_info_path)
 
     return 0
 

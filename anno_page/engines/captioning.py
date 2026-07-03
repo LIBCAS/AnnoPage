@@ -228,12 +228,19 @@ class PromptResult(BaseModel):
 
 
 class PromptData:
-    def __init__(self, image=None, region=None, metadata=None, prompt=None, result=None):
+    def __init__(self, image=None, region=None, metadata=None, prompt=None, usage=None, result=None):
         self.image = image
         self.region = region
         self.metadata = metadata
         self.prompt = prompt
+        self.usage = usage
         self.result: PromptResult|None = result
+
+
+class LLMResult:
+    def __init__(self, data: PromptResult|None = None, usage: dict|None = None):
+        self.data = data
+        self.usage = usage
 
 
 class PromptBuilderEngine(BaseEngine):
@@ -279,7 +286,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         self.prompt_builder = PromptBuilderEngine()
 
     @abstractmethod
-    def generate_image_caption(self, prompt_data: PromptData) -> PromptResult|None:
+    def generate_image_caption(self, prompt_data: PromptData) -> LLMResult:
         pass
 
     @staticmethod
@@ -327,7 +334,23 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
 
                 current_attempt += 1
 
-                unfinished_data = [item for item in data if item.result is None]
+                unfinished_data = []
+                for item in data:
+                    if item.result is None:
+                        item.usage["failed_attempts"] += 1
+                        unfinished_data.append(item)
+                        self.logger.info(f"Captioning attempt #{current_attempt} failed for region {item.region.id}, will retry.")
+                        print(item.usage)
+                    else:
+                        if "anno_page_processing" not in page_layout.metadata:
+                            page_layout.metadata["anno_page_processing"] = {}
+
+                        if self.__class__.__name__ not in page_layout.metadata["anno_page_processing"]:
+                            page_layout.metadata["anno_page_processing"][self.__class__.__name__] = {}
+
+                        page_layout.metadata["anno_page_processing"][self.__class__.__name__][item.region.id] = item.usage
+                        self.logger.info(f"Captioning attempt #{current_attempt} succeeded for region {item.region.id}.")
+
                 self.logger.info(f"Captioning attempt #{current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) > 1 else ''} remaining.")
 
         return page_layout
@@ -358,27 +381,39 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
                                              element_caption=region.graphical_metadata.title,
                                              metadata=page_metadata if page_metadata else [])
 
+        usage = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": 0,
+            "failed_attempts": 0
+        }
+
         return PromptData(
             image=image,
             region=region,
             metadata=page_metadata,
-            prompt=prompt
+            prompt=prompt,
+            usage=usage
         )
 
     def process_elements(self, data: list[PromptData]):
         if self.num_processes > 1:
             self.logger.debug(f"Processing image captions in parallel using {self.num_processes} processes.")
             with Pool(self.num_processes) as p:
-                image_captions = p.map(self.generate_image_caption, data)
+                captioning_results = p.map(self.generate_image_caption, data)
 
-            for item, image_caption in zip(data, image_captions):
-                item.result = image_caption
+            for item, captioning_result in zip(data, captioning_results):
+                item.result = captioning_result.data
+                for key in item.usage.keys():
+                    item.usage[key] += captioning_result.usage.get(key, 0)
         else:
             self.logger.debug("Processing image captions sequentially.")
             for item in data:
-                image_caption = self.generate_image_caption(item)
-                item.result = image_caption
-
+                captioning_result = self.generate_image_caption(item)
+                item.result = captioning_result.data
+                for key in item.usage.keys():
+                    item.usage[key] += captioning_result.usage.get(key, 0)
 
     def process_image_captions(self, data: list[PromptData]):
         for item in data:
@@ -441,7 +476,7 @@ class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
 
         self.prompt_max_tokens = self.prompt_settings.get("max_tokens", None)
 
-    def generate_image_caption(self, prompt_data: PromptData) -> PromptResult|None:
+    def generate_image_caption(self, prompt_data: PromptData) -> LLMResult:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
@@ -486,13 +521,30 @@ class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
             self.logger.warning(f"Request failed with status code {response.status_code}: {response.text}")
             return None
 
-        result = response.json()["choices"][0]["message"]["content"]
+        response_json = response.json()
+
+        result = LLMResult()
+        result.usage = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": 0,
+            "failed_attempts": 0
+        }
+
+        usage = response_json["usage"] if "usage" in response_json else None
+
+        if usage is not None:
+            result.usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
+            result.usage["completion_tokens"] += usage.get("completion_tokens", 0)
+            result.usage["total_tokens"] += usage.get("total_tokens", 0)
+            result.usage["cost"] += usage.get("cost", 0)
 
         image_caption = None
 
         try:
-            result_json = json.loads(result)
-            image_caption = PromptResult.model_validate(result_json)
+            response_content = json.loads(response_json["choices"][0]["message"]["content"])
+            image_caption = PromptResult.model_validate(response_content)
             self.logger.info(f"Successfully parsed caption for region {prompt_data.region.id}")
         except JSONDecodeError:
             self.logger.info(f"Failed to parse JSON for region {prompt_data.region.id}: {response.text}")
@@ -501,4 +553,6 @@ class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
         except Exception as e:
             self.logger.info(f"Exception for region {prompt_data.region.id}: {e}")
 
-        return image_caption
+        result.data = image_caption
+
+        return result

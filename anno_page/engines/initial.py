@@ -21,6 +21,12 @@ class InitialRecognitionResult(BaseModel):
     include_space: bool
 
 
+class LLMResult:
+    def __init__(self, data: InitialRecognitionResult | None = None, usage: dict | None = None):
+        self.data = data
+        self.usage = usage
+
+
 class InitialRecognitionEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
@@ -72,7 +78,16 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
             if self.categories is None or region.category.lower() in self.categories:
                 initial_crop, context_crop, continuing_line = self._prepare_prompt_data(image, page_layout, region)
 
-                result = self._process_initial(region, initial_crop, context_crop, continuing_line)
+                llm_result = self._process_initial(region, initial_crop, context_crop, continuing_line)
+                result = llm_result.data
+
+                if "anno_page_processing" not in page_layout.metadata:
+                    page_layout.metadata["anno_page_processing"] = {}
+
+                if self.__class__.__name__ not in page_layout.metadata["anno_page_processing"]:
+                    page_layout.metadata["anno_page_processing"][str(self.__class__.__name__)] = {}
+
+                page_layout.metadata["anno_page_processing"][str(self.__class__.__name__)][region.id] = llm_result.usage
 
                 if result is not None:
                     region.transcription = result.initial
@@ -86,7 +101,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
 
         return page_layout
 
-    def _process_initial(self, region, initial_crop, context_crop, continuing_line) -> InitialRecognitionResult|None:
+    def _process_initial(self, region, initial_crop, context_crop, continuing_line) -> LLMResult:
         example_output = InitialRecognitionResult(initial="X", include_space=True)
 
         prompt_template = self.prompt_text
@@ -134,15 +149,36 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
             "Authorization": f"Bearer {self.api_key}"
         }
 
-        for _ in range(self.max_attempts):
+        result = LLMResult()
+        result.usage = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": 0,
+            "failed_attempts": 0
+        }
+
+        for attempt in range(self.max_attempts):
+            self.logger.info(f"Attempt {attempt + 1} for region {region.id}")
+
             response = requests.post(self.api_url, headers=headers, json=request_args)
-            result = response.json()["choices"][0]["message"]["content"]
+            response_json = response.json()
+
+            usage = response_json["usage"] if "usage" in response_json else None
+
+            if usage is not None:
+                result.usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
+                result.usage["completion_tokens"] += usage.get("completion_tokens", 0)
+                result.usage["total_tokens"] += usage.get("total_tokens", 0)
+                result.usage["cost"] += usage.get("cost", 0)
+                result.usage["failed_attempts"] = attempt
 
             try:
-                result_json = json.loads(result)
-                initial_result = InitialRecognitionResult.model_validate(result_json)
+                response_content = json.loads(response_json["choices"][0]["message"]["content"])
+                result.data = InitialRecognitionResult.model_validate(response_content)
                 self.logger.info(f"Successfully parsed initial result for region {region.id}")
-                return initial_result
+                break
+
             except JSONDecodeError:
                 self.logger.info(f"Failed to parse JSON for region {region.id}: {response.text}")
             except ValidationError:
@@ -150,8 +186,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
             except Exception as e:
                 self.logger.info(f"Exception for region {region.id}: {e}")
 
-        self.logger.warning(f"Could not get valid result for region {region.id} after {self.max_attempts} attempts")
-        return None
+        return result
 
     def _prepare_prompt_data(self, image, page_layout, region):
         region_bbox = region.get_polygon_bounding_box()
