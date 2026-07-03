@@ -17,7 +17,8 @@ class YoloDetectionEngine(LayoutProcessingEngine):
         self.detector = YoloDetector(model_path=compose_path(self.config["MODEL_PATH"], self.config_path),
                                      device=self.device,
                                      detection_threshold=self.config.getfloat("DETECTION_THRESHOLD", 0.2),
-                                     image_size=self.config.getint("IMAGE_SIZE", 640))
+                                     image_size=self.config.getint("IMAGE_SIZE", 640),
+                                     agnostic_nms=self.config.getboolean("AGNOSTIC_NMS", False))
 
         self.categories = config_get_list(self.config, key="categories", fallback=None, make_lowercase=True)
 
@@ -75,16 +76,17 @@ class YoloDetectionEngine(LayoutProcessingEngine):
 
 
 class YoloDetector:
-    def __init__(self, model_path, device, detection_threshold=0.2, image_size=640):
+    def __init__(self, model_path, device, detection_threshold=0.2, image_size=640, agnostic_nms=False):
         self.model = YOLO(model_path).to(device)
         self.detection_threshold = detection_threshold
         self.image_size = image_size
+        self.agnostic_nms = agnostic_nms
 
     def __call__(self, *args, **kwargs):
         return self.detect(*args, **kwargs)
 
     def detect(self, image):
-        results = self.model(image, conf=self.detection_threshold, imgsz=self.image_size, verbose=False)
+        results = self.model(image, conf=self.detection_threshold, imgsz=self.image_size, verbose=False, agnostic_nms=self.agnostic_nms)
         return results[0]
 
     @property
