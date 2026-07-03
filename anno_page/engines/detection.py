@@ -42,7 +42,8 @@ class YoloDetectionEngine(LayoutProcessingEngine):
                 mods_id = self.get_next_mods_id(page_layout)
                 region.graphical_metadata = GraphicalObjectMetadata(tag_id=region_id,
                                                                     mods_id=mods_id,
-                                                                    mods_uuid=str(self.uuid_service()))
+                                                                    mods_uuid=str(self.uuid_service()),
+                                                                    used_ai_models={"element-detection": "yolo"})
 
                 page_layout.regions.append(region)
 
