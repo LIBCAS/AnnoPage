@@ -98,6 +98,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
                     if metadata is not None:
                         metadata.tag_description = result.initial
                         metadata.continuing_line = continuing_line
+                        metadata.used_ai_models["initial-recognition"] = self.prompt_model
 
         return page_layout
 

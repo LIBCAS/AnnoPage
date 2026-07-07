@@ -4,6 +4,7 @@ data/*
 *.logit
 *.logits
 *.xml
+!tests/**/*.xml
 *.jpg
 *.db
 

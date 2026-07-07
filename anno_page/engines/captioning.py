@@ -54,6 +54,8 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
 
             linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
+            linked_region.graphical_metadata.used_ai_models["caption-detection"] = "yolo"
+            linked_region.graphical_metadata.used_ai_models["caption-assignment"] = "nearest"
 
             for caption_line in caption_lines:
                 if caption_line.graphical_metadata is None:
@@ -109,6 +111,8 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
 
                         linked_region.graphical_metadata.title = caption_lines_text
                         linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
+                        linked_region.graphical_metadata.used_ai_models["caption-detection"] = "yolo"
+                        linked_region.graphical_metadata.used_ai_models["caption-assignment"] = "keypoints"
 
                         for caption_line in caption_lines:
                             if caption_line.graphical_metadata is None:
@@ -156,6 +160,8 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
 
             linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
+            linked_region.graphical_metadata.used_ai_models["caption-detection"] = "yolo"
+            linked_region.graphical_metadata.used_ai_models["caption-assignment"] = "organizer"
 
             for caption_line in caption_lines:
                 if caption_line.graphical_metadata is None:
@@ -351,7 +357,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
                         page_layout.metadata["anno_page_processing"][self.__class__.__name__][item.region.id] = item.usage
                         self.logger.info(f"Captioning attempt #{current_attempt} succeeded for region {item.region.id}.")
 
-                self.logger.info(f"Captioning attempt #{current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) > 1 else ''} remaining.")
+                self.logger.info(f"Captioning attempt #{current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) != 1 else ''} remaining.")
 
         return page_layout
 
@@ -447,6 +453,11 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
                 metadata.prompts = [item.prompt]
             else:
                 metadata.prompts.append(item.prompt)
+
+            metadata.used_ai_models["image-caption-generation"] = self.prompt_model
+            metadata.used_ai_models["image-description-generation"] = self.prompt_model
+            metadata.used_ai_models["image-topics-generation"] = self.prompt_model
+            metadata.used_ai_models["image-color-generation"] = self.prompt_model
 
             self.logger.info(f"Successfully processed caption for region {item.region.id}")
 
