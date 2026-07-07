@@ -39,6 +39,7 @@
             <mods:descriptionStandard>StandardNDK</mods:descriptionStandard>
             <mods:recordOrigin>machine-generated</mods:recordOrigin>
             <mods:recordInfoNote type="confidence">0.900</mods:recordInfoNote>
+            <mods:recordInfoNote type="initial-recognition">openai/gpt-5.4-mini</mods:recordInfoNote>
             <mods:recordIdentifier source="AnnoPage">uuid:01234567-0123-0123-0123-0123456789ab</mods:recordIdentifier>
             <mods:languageOfCataloging>
               <mods:languageTerm authority="iso639-2b">eng</mods:languageTerm>

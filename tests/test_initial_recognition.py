@@ -12,7 +12,7 @@ from anno_page.enums import Language, LineRelation
 from anno_page.core.layout import set_handlers, AnnoPageRegionLayout
 from anno_page.core.metadata import GraphicalObjectMetadata
 from anno_page.core.services import UuidService as AnnoPageUuidService, DateTimeService as AnnoPageDateTimeService
-from anno_page.engines.initial import InitialRecognitionEngine, InitialRecognitionResult
+from anno_page.engines.initial import InitialRecognitionEngine, InitialRecognitionResult, LLMResult
 
 from utils import generate_uuid, get_datetime_now, load_xml, assert_xml_equal
 
@@ -34,8 +34,8 @@ def test_alto_initial_no_space():
         continuing_line = [line for line in page_layout.lines_iterator() if line.id == "line2"][0]
         return None, None, continuing_line
 
-    def process_initial(region, initial_crop, context_crop, continuing_line) -> InitialRecognitionResult | None:
-        return InitialRecognitionResult(initial="XXX", include_space=False)
+    def process_initial(region, initial_crop, context_crop, continuing_line) -> LLMResult:
+        return LLMResult(data=InitialRecognitionResult(initial="XXX", include_space=False))
 
     config_dict = {
         "categories": json.dumps(["initial"]),
@@ -144,8 +144,8 @@ def test_alto_initial_with_space():
         continuing_line = [line for line in page_layout.lines_iterator() if line.id == "line2"][0]
         return None, None, continuing_line
 
-    def process_initial(region, initial_crop, context_crop, continuing_line) -> InitialRecognitionResult | None:
-        return InitialRecognitionResult(initial="XXX", include_space=True)
+    def process_initial(region, initial_crop, context_crop, continuing_line) -> LLMResult:
+        return LLMResult(data=InitialRecognitionResult(initial="XXX", include_space=True))
 
     config_dict = {
         "categories": json.dumps(["initial"]),
