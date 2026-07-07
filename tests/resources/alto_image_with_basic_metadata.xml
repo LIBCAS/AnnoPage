@@ -1,0 +1,103 @@
+<?xml version='1.0' encoding='utf-8'?>
+<alto xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:mods="http://www.loc.gov/mods/v3"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/standards/alto/ns-v4#">
+    <Description>
+        <MeasurementUnit>pixel</MeasurementUnit>
+        <sourceImageInformation>
+            <fileName>test_page</fileName>
+        </sourceImageInformation>
+        <Processing ID="IdOcr">
+            <processingDateTime>1970-01-01T12:00:00</processingDateTime>
+            <processingSoftware>
+                <softwareCreator>Project PERO</softwareCreator>
+                <softwareName>PERO OCR</softwareName>
+                <softwareVersion>v0.1.0</softwareVersion>
+            </processingSoftware>
+        </Processing>
+        <Processing ID="AnnoPage">
+            <processingDateTime>1970-01-01T12:00:00</processingDateTime>
+            <processingSoftware>
+                <softwareCreator>Orbis Pictus</softwareCreator>
+                <softwareName>AnnoPage</softwareName>
+                <softwareVersion>0.0.1</softwareVersion>
+            </processingSoftware>
+        </Processing>
+    </Description>
+    <Tags>
+        <LayoutTag ID="image_001" TYPE="Structural" LABEL="Image">
+            <XmlData>
+                <mods:mods ID="MODS_PICT_0001">
+                    <mods:typeOfResource>still image</mods:typeOfResource>
+
+                    <mods:genre altRepGroup="genre-1" lang="eng">image</mods:genre>
+                    <mods:genre altRepGroup="genre-1" lang="cze">obrázek</mods:genre>
+
+                    <mods:physicalDescription>
+                        <mods:extent unit="pixels">70x80</mods:extent>
+                    </mods:physicalDescription>
+
+                    <mods:titleInfo altRepGroup="title-1">
+                        <mods:title>Fig. 1: Overview</mods:title>
+                    </mods:titleInfo>
+
+                    <mods:physicalDescription altRepGroup="color-1">
+                        <mods:form type="color" lang="eng">grayscale</mods:form>
+                    </mods:physicalDescription>
+                    <mods:physicalDescription altRepGroup="color-1">
+                        <mods:form type="color" lang="cze">černobílý</mods:form>
+                    </mods:physicalDescription>
+
+                    <mods:abstract altRepGroup="description-1" type="description" lang="eng">This is a description of an image</mods:abstract>
+                    <mods:abstract altRepGroup="description-1" type="description" lang="cze">Toto je popis obrázku</mods:abstract>
+
+                    <mods:abstract altRepGroup="caption-1" type="caption" lang="eng">This is a caption of an image</mods:abstract>
+                    <mods:abstract altRepGroup="caption-1" type="caption" lang="cze">Toto je titulek obrázku</mods:abstract>
+
+                    <mods:subject altRepGroup="subject-1">
+                        <mods:topic lang="eng">topic1</mods:topic>
+                    </mods:subject>
+                    <mods:subject altRepGroup="subject-2">
+                        <mods:topic lang="eng">topic2</mods:topic>
+                    </mods:subject>
+
+                    <mods:subject altRepGroup="subject-1">
+                        <mods:topic lang="cze">topic1</mods:topic>
+                    </mods:subject>
+                    <mods:subject altRepGroup="subject-2">
+                        <mods:topic lang="cze">topic2</mods:topic>
+                    </mods:subject>
+
+                    <mods:identifier type="uuid">uuid:01234567-0123-0123-0123-0123456789ab</mods:identifier>
+
+                    <mods:recordInfo>
+                        <mods:recordCreationDate>1970-01-01T12:00:00</mods:recordCreationDate>
+                        <mods:recordContentSource>AnnoPage v0.0.1</mods:recordContentSource>
+                        <mods:descriptionStandard>StandardNDK</mods:descriptionStandard>
+                        <mods:recordOrigin>machine-generated</mods:recordOrigin>
+                        <mods:recordInfoNote type="confidence">0.900</mods:recordInfoNote>
+                        <mods:recordIdentifier source="AnnoPage">uuid:01234567-0123-0123-0123-0123456789ab
+                        </mods:recordIdentifier>
+                        <mods:languageOfCataloging>
+                            <mods:languageTerm authority="iso639-2b">eng</mods:languageTerm>
+                            <mods:languageTerm authority="iso639-2b">cze</mods:languageTerm>
+                        </mods:languageOfCataloging>
+                    </mods:recordInfo>
+                </mods:mods>
+            </XmlData>
+        </LayoutTag>
+    </Tags>
+    <Layout>
+        <Page ID="id_test_page" PHYSICAL_IMG_NR="1" HEIGHT="297" WIDTH="210">
+            <TopMargin HEIGHT="20" WIDTH="210" VPOS="0" HPOS="0"/>
+            <LeftMargin HEIGHT="297" WIDTH="10" VPOS="0" HPOS="0"/>
+            <RightMargin HEIGHT="297" WIDTH="0" VPOS="0" HPOS="210"/>
+            <BottomMargin HEIGHT="0" WIDTH="210" VPOS="297" HPOS="0"/>
+            <PrintSpace HEIGHT="277" WIDTH="200" VPOS="20" HPOS="10">
+                <ComposedBlock ID="id_test_page_CB0001" TYPE="Image" HEIGHT="80" WIDTH="70" VPOS="20" HPOS="10"
+                               TAGREFS="image_001">
+                    <GraphicalElement ID="id_test_page_GE0001" HEIGHT="80" WIDTH="70" VPOS="20" HPOS="10"/>
+                </ComposedBlock>
+            </PrintSpace>
+        </Page>
+    </Layout>
+</alto>

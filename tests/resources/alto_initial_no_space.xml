@@ -1,0 +1,115 @@
+<?xml version='1.0' encoding='utf-8'?>
+<alto xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:mods="http://www.loc.gov/mods/v3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/standards/alto/ns-v4#">
+  <Description>
+    <MeasurementUnit>pixel</MeasurementUnit>
+    <sourceImageInformation>
+      <fileName>test_page</fileName>
+    </sourceImageInformation>
+    <Processing ID="IdOcr">
+      <processingDateTime>1970-01-01T12:00:00</processingDateTime>
+      <processingSoftware>
+        <softwareCreator>Project PERO</softwareCreator>
+        <softwareName>PERO OCR</softwareName>
+        <softwareVersion>v0.1.0</softwareVersion>
+      </processingSoftware>
+    </Processing>
+    <Processing ID="AnnoPage">
+      <processingDateTime>1970-01-01T12:00:00</processingDateTime>
+      <processingSoftware>
+        <softwareCreator>Orbis Pictus</softwareCreator>
+        <softwareName>AnnoPage</softwareName>
+        <softwareVersion>0.0.1</softwareVersion>
+      </processingSoftware>
+    </Processing>
+  </Description>
+  <Tags>
+    <LayoutTag ID="initial_001" TYPE="Structural" LABEL="Initial" DESCRIPTION="XXX">
+      <XmlData>
+        <mods:mods ID="MODS_PICT_0001">
+          <mods:typeOfResource>still image</mods:typeOfResource>
+          <mods:genre altRepGroup="genre-1" lang="eng">initial</mods:genre>
+          <mods:genre altRepGroup="genre-1" lang="cze">iniciála</mods:genre>
+          <mods:physicalDescription>
+            <mods:extent unit="pixels">55x55</mods:extent>
+          </mods:physicalDescription>
+          <mods:identifier type="uuid">uuid:01234567-0123-0123-0123-0123456789ab</mods:identifier>
+          <mods:recordInfo>
+            <mods:recordCreationDate>1970-01-01T12:00:00</mods:recordCreationDate>
+            <mods:recordContentSource>AnnoPage v0.0.1</mods:recordContentSource>
+            <mods:descriptionStandard>StandardNDK</mods:descriptionStandard>
+            <mods:recordOrigin>machine-generated</mods:recordOrigin>
+            <mods:recordInfoNote type="confidence">0.900</mods:recordInfoNote>
+            <mods:recordIdentifier source="AnnoPage">uuid:01234567-0123-0123-0123-0123456789ab</mods:recordIdentifier>
+            <mods:languageOfCataloging>
+              <mods:languageTerm authority="iso639-2b">eng</mods:languageTerm>
+              <mods:languageTerm authority="iso639-2b">cze</mods:languageTerm>
+            </mods:languageOfCataloging>
+          </mods:recordInfo>
+        </mods:mods>
+      </XmlData>
+    </LayoutTag>
+  </Tags>
+  <Layout>
+    <Page ID="id_test_page" PHYSICAL_IMG_NR="1" HEIGHT="297" WIDTH="210">
+      <TopMargin HEIGHT="10" WIDTH="210" VPOS="0" HPOS="0"/>
+      <LeftMargin HEIGHT="297" WIDTH="10" VPOS="0" HPOS="0"/>
+      <RightMargin HEIGHT="297" WIDTH="0" VPOS="0" HPOS="210"/>
+      <BottomMargin HEIGHT="0" WIDTH="210" VPOS="297" HPOS="0"/>
+      <PrintSpace HEIGHT="287" WIDTH="200" VPOS="10" HPOS="10">
+        <TextBlock ID="block_text_region_1" HEIGHT="35" WIDTH="190" VPOS="10" HPOS="10">
+          <TextLine ID="line_line0" BASELINE="10,20 200,20" VPOS="10" HPOS="10" HEIGHT="15" WIDTH="190">
+            <String CONTENT="This" HEIGHT="15" WIDTH="40" VPOS="10" HPOS="10"/>
+            <String CONTENT="is" HEIGHT="15" WIDTH="40" VPOS="10" HPOS="50"/>
+            <String CONTENT="line" HEIGHT="15" WIDTH="40" VPOS="10" HPOS="90"/>
+            <String CONTENT="no." HEIGHT="15" WIDTH="40" VPOS="10" HPOS="130"/>
+            <String CONTENT="1." HEIGHT="15" WIDTH="40" VPOS="10" HPOS="170"/>
+          </TextLine>
+          <TextLine ID="line_line1" BASELINE="10,40 200,40" VPOS="30" HPOS="10" HEIGHT="15" WIDTH="190">
+            <String CONTENT="This" HEIGHT="15" WIDTH="40" VPOS="30" HPOS="10"/>
+            <String CONTENT="is" HEIGHT="15" WIDTH="40" VPOS="30" HPOS="50"/>
+            <String CONTENT="line" HEIGHT="15" WIDTH="40" VPOS="30" HPOS="90"/>
+            <String CONTENT="no." HEIGHT="15" WIDTH="40" VPOS="30" HPOS="130"/>
+            <String CONTENT="2." HEIGHT="15" WIDTH="40" VPOS="30" HPOS="170"/>
+          </TextLine>
+        </TextBlock>
+        <TextBlock ID="block_text_region_2" HEIGHT="95" WIDTH="190" VPOS="50" HPOS="10">
+          <TextLine ID="line_line2" BASELINE="70,60 200,60" VPOS="50" HPOS="70" HEIGHT="15" WIDTH="130">
+            <String CONTENT="A" HEIGHT="15" WIDTH="50" VPOS="50" HPOS="70" SUBS_CONTENT="XXXA" SUBS_TYPE="Abbreviation"/>
+            <String CONTENT="line" HEIGHT="15" WIDTH="50" VPOS="50" HPOS="120"/>
+            <String CONTENT="no." HEIGHT="15" WIDTH="50" VPOS="50" HPOS="170"/>
+            <String CONTENT="3." HEIGHT="15" WIDTH="50" VPOS="50" HPOS="220"/>
+          </TextLine>
+          <TextLine ID="line_line3" BASELINE="70,80 200,80" VPOS="70" HPOS="70" HEIGHT="15" WIDTH="130">
+            <String CONTENT="A" HEIGHT="15" WIDTH="50" VPOS="70" HPOS="70"/>
+            <String CONTENT="line" HEIGHT="15" WIDTH="50" VPOS="70" HPOS="120"/>
+            <String CONTENT="no." HEIGHT="15" WIDTH="50" VPOS="70" HPOS="170"/>
+            <String CONTENT="4." HEIGHT="15" WIDTH="50" VPOS="70" HPOS="220"/>
+          </TextLine>
+          <TextLine ID="line_line4" BASELINE="70,100 200,100" VPOS="90" HPOS="70" HEIGHT="15" WIDTH="130">
+            <String CONTENT="A" HEIGHT="15" WIDTH="50" VPOS="90" HPOS="70"/>
+            <String CONTENT="line" HEIGHT="15" WIDTH="50" VPOS="90" HPOS="120"/>
+            <String CONTENT="no." HEIGHT="15" WIDTH="50" VPOS="90" HPOS="170"/>
+            <String CONTENT="5." HEIGHT="15" WIDTH="50" VPOS="90" HPOS="220"/>
+          </TextLine>
+          <TextLine ID="line_line5" BASELINE="10,120 200,120" VPOS="110" HPOS="10" HEIGHT="15" WIDTH="190">
+            <String CONTENT="This" HEIGHT="15" WIDTH="40" VPOS="110" HPOS="10"/>
+            <String CONTENT="is" HEIGHT="15" WIDTH="40" VPOS="110" HPOS="50"/>
+            <String CONTENT="line" HEIGHT="15" WIDTH="40" VPOS="110" HPOS="90"/>
+            <String CONTENT="no." HEIGHT="15" WIDTH="40" VPOS="110" HPOS="130"/>
+            <String CONTENT="6." HEIGHT="15" WIDTH="40" VPOS="110" HPOS="170"/>
+          </TextLine>
+          <TextLine ID="line_line6" BASELINE="10,140 200,140" VPOS="130" HPOS="10" HEIGHT="15" WIDTH="190">
+            <String CONTENT="This" HEIGHT="15" WIDTH="40" VPOS="130" HPOS="10"/>
+            <String CONTENT="is" HEIGHT="15" WIDTH="40" VPOS="130" HPOS="50"/>
+            <String CONTENT="line" HEIGHT="15" WIDTH="40" VPOS="130" HPOS="90"/>
+            <String CONTENT="no." HEIGHT="15" WIDTH="40" VPOS="130" HPOS="130"/>
+            <String CONTENT="7." HEIGHT="15" WIDTH="40" VPOS="130" HPOS="170"/>
+          </TextLine>
+        </TextBlock>
+        <ComposedBlock ID="id_test_page_CB0001" TYPE="Initial" HEIGHT="55" WIDTH="55" VPOS="50" HPOS="10" TAGREFS="initial_001">
+          <GraphicalElement ID="id_test_page_GE0001" HEIGHT="55" WIDTH="55" VPOS="50" HPOS="10"/>
+        </ComposedBlock>
+      </PrintSpace>
+    </Page>
+  </Layout>
+</alto>
