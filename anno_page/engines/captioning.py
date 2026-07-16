@@ -53,7 +53,7 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
             caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
             caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
 
-            linked_region = find_nearest_region(caption, page_layout, categories=["Image", "Photograph"])
+            linked_region = find_nearest_region(caption, page_layout, categories=self.categories)
 
             caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.id}",
                                                           mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
@@ -115,7 +115,7 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
             for caption_keypoint, caption_keypoint_conf in zip(caption_keypoints, caption_keypoints_confs):
                 if caption_keypoint_conf >= self.yolo_keypoint_threshold:
                     x, y = caption_keypoint
-                    linked_region = find_nearest_region((x, y, x, y), page_layout, categories=["Image", "Photograph"])
+                    linked_region = find_nearest_region((x, y, x, y), page_layout, categories=self.categories)
                     if linked_region is not None:
                         caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.id}",
                                                                     mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
