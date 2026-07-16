@@ -143,8 +143,16 @@ class RelatedLinesMetadata(BaseMetadata):
                  title: Optional[str | Dict[Language, str]] = None,
                  mods_uuid=None,
                  record_identifier=None,
-                 used_ai_models: Optional[Dict[str, str]] = None):
-        super().__init__(tag_id, mods_id, mods_uuid, record_identifier, used_ai_models)
+                 creation_date_time=None,
+                 used_ai_models: Optional[Dict[str, str]] = None,
+                 confidence: Optional[float] = None):
+        super().__init__(tag_id=tag_id,
+                         mods_id=mods_id,
+                         mods_uuid=mods_uuid,
+                         record_identifier=record_identifier,
+                         creation_date_time=creation_date_time,
+                         used_ai_models=used_ai_models,
+                         confidence=confidence)
         self.lines = lines
         self.relation = relation
         self.description = description
@@ -260,11 +268,13 @@ class RelatedLinesMetadata(BaseMetadata):
         mods_uuid = self.from_altoxml_mods_uuid(mods_data)
         record_identifier = self.from_altoxml_mods_record_identifier(mods_data)
         creation_date_time = self.from_altoxml_mods_creation_date_time(mods_data)
+        confidence = self.from_altoxml_mods_confidence(mods_data)
 
         self.title = title
         self.mods_uuid = mods_uuid
         self.record_identifier = record_identifier
         self.creation_date_time = creation_date_time
+        self.confidence = confidence
 
         return self
 
@@ -427,6 +437,7 @@ class GraphicalObjectMetadata(BaseMetadata):
                  mods_id,
                  mods_uuid=None,
                  record_identifier=None,
+                 creation_date_time=None,
                  tag_description: Optional[str] = None,
                  description: Optional[str| Dict[Language, str]] = None,
                  caption: Optional[str | Dict[Language, str]] = None,
@@ -437,8 +448,15 @@ class GraphicalObjectMetadata(BaseMetadata):
                  reference_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  continuing_line: Optional[TextLine] = None,
                  prompts: Optional[List[str]] = None,
-                 used_ai_models: Optional[Dict[str, str]] = None):
-        super().__init__(tag_id, mods_id, mods_uuid, record_identifier, used_ai_models)
+                 used_ai_models: Optional[Dict[str, str]] = None,
+                 confidence: Optional[float] = None):
+        super().__init__(tag_id=tag_id,
+                         mods_id=mods_id,
+                         mods_uuid=mods_uuid,
+                         record_identifier=record_identifier,
+                         creation_date_time=creation_date_time,
+                         used_ai_models=used_ai_models,
+                         confidence=confidence)
         self.tag_description = tag_description
         self.caption = caption
         self.topics = topics
@@ -755,6 +773,7 @@ class GraphicalObjectMetadata(BaseMetadata):
         self.mods_uuid = mods_uuid
         self.record_identifier = record_identifier
         self.used_ai_models = used_ai_models
+        self.confidence = confidence
         self.creation_date_time = creation_date_time
 
         return self
