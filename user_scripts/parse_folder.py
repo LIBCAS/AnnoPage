@@ -12,9 +12,9 @@ import configparser
 from lxml import etree as ET
 from safe_gpu import safe_gpu
 from multiprocessing import Pool
-from pero_ocr.core.layout import PageLayout, ALTOVersion
+from pero_ocr.core.layout import ALTOVersion
 
-from anno_page.core.layout import render_to_image, add_page_layout_to_alto, set_handlers
+from anno_page.core.layout import render_to_image, add_page_layout_to_alto, remove_annopage_elements, AnnoPagePageLayout
 from anno_page.core.llm_api_aliases import load_llm_api_aliases
 from anno_page.core.page_parser import PageParser
 
@@ -231,24 +231,21 @@ class Computator:
                 image = None
 
             alto_file_path = None
-            page_layout = PageLayout(id=file_id, page_size=(image.shape[0], image.shape[1]))
+            page_layout = AnnoPagePageLayout(id=file_id, page_size=(image.shape[0], image.shape[1]))
 
             self.logger.info(f"Created empty page layout for id: '{file_id}'.")
 
             if self.input_alto_path is not None:
-                if not self.page_parser.requires_lines:
-                    self.logger.info("Page parser does not require lines, skipping ALTO file loading.")
+                alto_file_path = os.path.join(self.input_alto_path, file_id + '.xml')
+                if os.path.isfile(alto_file_path):
+                    page_layout.from_altoxml(alto_file_path)
+                    self.logger.info(f"Loaded ALTO file: '{alto_file_path}'.")
                 else:
-                    alto_file_path = os.path.join(self.input_alto_path, file_id + '.xml')
-                    if os.path.isfile(alto_file_path):
-                        page_layout.from_altoxml(alto_file_path)
-                        self.logger.info(f"Loaded ALTO file: '{alto_file_path}'.")
-                    else:
-                        self.logger.warning(f"ALTO file does not exist: '{alto_file_path}'.")
+                    self.logger.warning(f"ALTO file does not exist: '{alto_file_path}'.")
             elif self.input_xml_path is not None:
                 xml_file_path = os.path.join(self.input_xml_path, file_id + '.xml')
                 if os.path.isfile(xml_file_path):
-                    page_layout = PageLayout(file=xml_file_path)
+                    page_layout.from_pagexml(xml_file_path)
                     self.logger.info(f"Loaded PAGE XML file: '{xml_file_path}'.")
                 else:
                     self.logger.warning(f"PAGE XML file does not exist: '{xml_file_path}'.")
@@ -271,7 +268,6 @@ class Computator:
             self.processing_info[file_id] = page_layout.metadata["anno_page_processing"]
 
             if self.output_xml_path is not None:
-                set_handlers(page_layout)
                 page_layout.to_pagexml(os.path.join(self.output_xml_path, file_id + '.xml'))
 
             if self.output_alto_path is not None:
@@ -279,14 +275,15 @@ class Computator:
 
                 if alto_file_path is not None:
                     parser = ET.XMLParser(remove_blank_text=True)
-                    alto = ET.parse(alto_file_path, parser)
-                    add_page_layout_to_alto(page_layout, alto.getroot())
+                    tree = ET.parse(alto_file_path, parser)
+                    alto = tree.getroot()
+                    alto = remove_annopage_elements(alto)
+                    alto = add_page_layout_to_alto(page_layout, alto)
 
                     with open(output_alto_path, 'w', encoding="utf-8") as file:
                         file.write(ET.tostring(alto, pretty_print=True, encoding="utf-8", xml_declaration=True).decode("utf-8"))
 
                 else:
-                    set_handlers(page_layout)
                     page_layout.to_altoxml(output_alto_path, version=ALTOVersion.ALTO_v4_4)
 
             if self.output_embeddings_path is not None:
