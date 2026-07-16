@@ -190,10 +190,8 @@ def add_page_layout_to_alto(page_layout: AnnoPagePageLayout, alto_root: Element,
     print_space_coords = get_print_space_coords(page_layout, print_space_element)
 
     for region in page_layout.regions:
-        if region.category in (None, "text"):
-            continue
-
-        print_space_coords = region.to_altoxml(print_space_element, tags_element, mods_namespace, None, 0.0, print_space_coords, alto_version)
+        if isinstance(region, AnnoPageRegionLayout):
+            print_space_coords = region.to_altoxml(print_space_element, tags_element, mods_namespace, None, 0.0, print_space_coords, alto_version)
 
     update_print_space_and_margins(page_layout, page_element, print_space_coords)
 
