@@ -132,12 +132,6 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
                         linked_region.graphical_metadata.used_ai_models["caption-detection"] = "yolo"
                         linked_region.graphical_metadata.used_ai_models["caption-assignment"] = "keypoints"
 
-                        for caption_line in caption_lines:
-                            if caption_line.graphical_metadata is None:
-                                caption_line.graphical_metadata = [caption_lines_metadata]
-                            else:
-                                caption_line.graphical_metadata.append(caption_lines_metadata)
-
         return page_layout
 
 
