@@ -26,6 +26,7 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
 
+        self.categories = config_get_list(self.config, key="categories", fallback=["Image", "Photograph"], make_lowercase=True)
         self.clear_metadata_before_processing = config.getboolean("clear_metadata_before_processing", fallback=True)
 
         self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
@@ -80,6 +81,7 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
 
+        self.categories = config_get_list(self.config, key="categories", fallback=["Image", "Photograph"], make_lowercase=True)
         self.clear_metadata_before_processing = config.getboolean("clear_metadata_before_processing", fallback=True)
 
         self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
