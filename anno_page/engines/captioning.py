@@ -591,7 +591,7 @@ class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
         except JSONDecodeError:
             self.logger.info(f"Failed to parse JSON for region {prompt_data.region.id}: {response.text}")
         except ValidationError:
-            self.logger.info(f"Caption for region {prompt_data.region.id} does not conform to expected format: {result_json}")
+            self.logger.info(f"Caption for region {prompt_data.region.id} does not conform to expected format: {response_content}")
         except Exception as e:
             self.logger.info(f"Exception for region {prompt_data.region.id}: {e}")
 
