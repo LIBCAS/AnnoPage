@@ -26,12 +26,22 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
 
+        self.clear_metadata_before_processing = config.getboolean("clear_metadata_before_processing", fallback=True)
+
         self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
                                      device=self.device,
                                      detection_threshold=self.config.getfloat("YOLO_DETECTION_THRESHOLD", 0.2),
                                      image_size=self.config.getint("YOLO_IMAGE_SIZE", 640))
 
     def process_page(self, page_image, page_layout):
+        if self.clear_metadata_before_processing:
+            for region in page_layout.regions:
+                if region.graphical_metadata is not None:
+                    region.graphical_metadata.title = None
+                    region.graphical_metadata.caption_lines_metadata = None
+                    region.graphical_metadata.used_ai_models.pop("caption-detection", None)
+                    region.graphical_metadata.used_ai_models.pop("caption-assignment", None)
+
         yolo_result = self.detector(page_image)
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
 
@@ -70,6 +80,8 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
 
+        self.clear_metadata_before_processing = config.getboolean("clear_metadata_before_processing", fallback=True)
+
         self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
                                      device=self.device,
                                      detection_threshold=self.config.getfloat("YOLO_DETECTION_THRESHOLD", 0.2),
@@ -78,6 +90,14 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
         self.yolo_keypoint_threshold = self.config.getfloat("yolo_keypoint_threshold", fallback=0.5)
 
     def process_page(self, page_image, page_layout):
+        if self.clear_metadata_before_processing:
+            for region in page_layout.regions:
+                if region.graphical_metadata is not None:
+                    region.graphical_metadata.title = None
+                    region.graphical_metadata.caption_lines_metadata = None
+                    region.graphical_metadata.used_ai_models.pop("caption-detection", None)
+                    region.graphical_metadata.used_ai_models.pop("caption-assignment", None)
+
         yolo_result = self.detector(page_image)
 
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
@@ -127,6 +147,8 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
 
+        self.clear_metadata_before_processing = config.getboolean("clear_metadata_before_processing", fallback=True)
+
         self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
                                      device=self.device,
                                      detection_threshold=self.config.getfloat("YOLO_DETECTION_THRESHOLD", 0.2),
@@ -137,6 +159,14 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
                                                   categories=config_get_list(self.config, key="organizer_categories", fallback=[]))
 
     def process_page(self, page_image, page_layout):
+        if self.clear_metadata_before_processing:
+            for region in page_layout.regions:
+                if region.graphical_metadata is not None:
+                    region.graphical_metadata.title = None
+                    region.graphical_metadata.caption_lines_metadata = None
+                    region.graphical_metadata.used_ai_models.pop("caption-detection", None)
+                    region.graphical_metadata.used_ai_models.pop("caption-assignment", None)
+
         yolo_result = self.detector(page_image)
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
 
@@ -282,6 +312,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         self.num_processes = self.config.getint('num_processes', fallback=1)
         self.max_attempts = self.config.getint('max_attempts', fallback=3)
         self.only_prepare_prompts = self.config.getboolean('only_prepare_prompts', fallback=False)
+        self.clear_metadata_before_processing = self.config.getboolean('clear_metadata_before_processing', fallback=True)
 
         with open(self.prompt_settings_path, 'r') as f:
             self.prompt_settings = json.load(f)
@@ -312,6 +343,16 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         for region in page_layout.regions:
             if region.category is None or region.category.lower() == "text":
                 continue
+
+            if region.graphical_metadata is not None and self.clear_metadata_before_processing:
+                region.graphical_metadata.caption = None
+                region.graphical_metadata.description = None
+                region.graphical_metadata.topics = None
+                region.graphical_metadata.color = None
+                region.graphical_metadata.used_ai_models.pop("image-caption-generation", None)
+                region.graphical_metadata.used_ai_models.pop("image-description-generation", None)
+                region.graphical_metadata.used_ai_models.pop("image-topics-generation", None)
+                region.graphical_metadata.used_ai_models.pop("image-color-generation", None)
 
             if self.categories is None or region.category.lower() in self.categories:
                 image = self.crop_region_image(page_image, region)
