@@ -61,7 +61,8 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
                                                           lines=caption_lines,
                                                           relation=LineRelation.CAPTION,
                                                           description=caption_lines_text,
-                                                          title=caption_lines_text)
+                                                          title=caption_lines_text,
+                                                          confidence=1.0)
 
             linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
@@ -119,11 +120,12 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
                     linked_region = find_nearest_region((x, y, x, y), page_layout, categories=self.categories)
                     if linked_region is not None:
                         caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.graphical_metadata.tag_id}",
-                                                                    mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
-                                                                    lines=caption_lines,
-                                                                    relation=LineRelation.CAPTION,
-                                                                    description=caption_lines_text,
-                                                                    title=caption_lines_text)
+                                                                      mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
+                                                                      lines=caption_lines,
+                                                                      relation=LineRelation.CAPTION,
+                                                                      description=caption_lines_text,
+                                                                      title=caption_lines_text,
+                                                                      confidence=1.0)
 
                         linked_region.graphical_metadata.title = caption_lines_text
                         linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
@@ -182,7 +184,8 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
                                                           lines=caption_lines,
                                                           relation=LineRelation.CAPTION,
                                                           description=caption_lines_text,
-                                                          title=caption_lines_text)
+                                                          title=caption_lines_text,
+                                                          confidence=1.0)
 
             linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
