@@ -11,7 +11,6 @@ from json import JSONDecodeError
 from jinja2 import Template
 from pydantic import BaseModel, ValidationError
 from multiprocessing import Pool
-from urllib.parse import urljoin
 
 from anno_page.core.utils import compose_path, config_get_list
 from anno_page.core.llm_api_aliases import get_llm_api_aliases
