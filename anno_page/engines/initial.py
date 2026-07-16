@@ -102,7 +102,6 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
                     if result.include_space:
                         region.transcription += " "
 
-                    metadata: GraphicalObjectMetadata = region.graphical_metadata
                     if metadata is not None:
                         metadata.tag_description = result.initial
                         metadata.continuing_line = continuing_line
