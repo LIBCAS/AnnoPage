@@ -374,6 +374,20 @@ class RelatedLinesMetadata(BaseMetadata):
 
         return None
 
+    @staticmethod
+    def from_altoxml_mods_confidence(mods_data):
+        record_info_note_elements = mods_data.findall("mods:recordInfo/mods:recordInfoNote[@type='confidence']", mods_data.nsmap)
+
+        confidence = None
+        for note in record_info_note_elements:
+            if note.text:
+                try:
+                    confidence = float(note.text.strip())
+                except ValueError:
+                    continue
+
+        return confidence
+
     def to_dict(self) -> dict:
         result = super().to_dict()
 
