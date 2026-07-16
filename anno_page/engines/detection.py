@@ -21,10 +21,14 @@ class YoloDetectionEngine(LayoutProcessingEngine):
                                      agnostic_nms=self.config.getboolean("AGNOSTIC_NMS", False))
 
         self.categories = config_get_list(self.config, key="categories", fallback=None, make_lowercase=True)
+        self.remove_existing_regions = self.config.getboolean("REMOVE_EXISTING_REGIONS", True)
 
         self.uuid_service = UuidService()
 
     def process_page(self, page_image, page_layout):
+        if self.remove_existing_regions:
+            page_layout.regions = [region for region in page_layout.regions if not isinstance(region, AnnoPageRegionLayout)]
+
         results = self.detector(page_image)
 
         boxes = results.boxes.data.cpu()
