@@ -10,6 +10,7 @@ from jinja2 import Template
 from pydantic import BaseModel, ValidationError
 from shapely.geometry import Polygon
 
+from anno_page.core.layout import AnnoPageRegionLayout
 from anno_page.core.utils import compose_path, config_get_list
 from anno_page.engines.base import LayoutProcessingEngine
 from anno_page.core.metadata import GraphicalObjectMetadata
@@ -73,7 +74,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
 
     def process_page(self, image, page_layout):
         for region in page_layout.regions:
-            if region.category is None or region.category.lower() == "text":
+            if not isinstance(region, AnnoPageRegionLayout):
                 continue
 
             if self.categories is None or region.category.lower() in self.categories:

@@ -19,6 +19,7 @@ from anno_page.engines import BaseEngine, LayoutProcessingEngine
 from anno_page.engines.detection import YoloDetector
 from anno_page.enums import Language, LineRelation
 from anno_page.engines.helpers import find_nearest_region, find_lines_in_bbox
+from anno_page.core.layout import AnnoPageRegionLayout
 
 
 class CaptionYoloNearestEngine(LayoutProcessingEngine):
@@ -330,7 +331,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         data = []
 
         for region in page_layout.regions:
-            if region.category is None or region.category.lower() == "text":
+            if not isinstance(region, AnnoPageRegionLayout):
                 continue
 
             if region.graphical_metadata is not None and self.clear_metadata_before_processing:

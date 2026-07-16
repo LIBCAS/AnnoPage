@@ -3,7 +3,7 @@ import numpy as np
 from ultralytics import YOLO
 
 from anno_page.core.utils import compose_path, config_get_list
-from anno_page.core.layout import AnnoPageRegionLayout as RegionLayout
+from anno_page.core.layout import AnnoPageRegionLayout
 from anno_page.core.metadata import GraphicalObjectMetadata
 from anno_page.core.services import UuidService
 from anno_page.engines import LayoutProcessingEngine
@@ -41,7 +41,7 @@ class YoloDetectionEngine(LayoutProcessingEngine):
                 region_id = self.get_next_region_id(page_layout, category, prefix=category_name)
                 polygon = np.array([[x_min, y_min], [x_min, y_max], [x_max, y_max], [x_max, y_min], [x_min, y_min]])
 
-                region = RegionLayout(region_id, polygon, category=category, detection_confidence=conf)
+                region = AnnoPageRegionLayout(region_id, polygon, category=category, detection_confidence=conf)
 
                 mods_id = self.get_next_mods_id(page_layout)
                 region.graphical_metadata = GraphicalObjectMetadata(tag_id=region_id,
