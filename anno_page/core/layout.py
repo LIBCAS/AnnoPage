@@ -228,6 +228,21 @@ def remove_tagrefs(alto, tag_id):
 
     return alto
 
+def check_tag_source(alto, tag_id, tag_name):
+    record_content_source_element = alto.find(f".//{tag_name}[@ID='{tag_id}']/XmlData/mods:mods/mods:recordInfo/mods:recordContentSource", namespaces=alto.nsmap)
+    if record_content_source_element is None:
+        return False
+
+    try:
+        record_content_source = record_content_source_element.text.split()[0]
+    except:
+        return False
+
+    if record_content_source != globals.software_name:
+        return False
+
+    return True
+
 
 def remove_annopage_elements(alto):
     alto_bytes_io = BytesIO(ET.tostring(alto, encoding="utf-8", xml_declaration=True))
@@ -245,12 +260,14 @@ def remove_annopage_elements(alto):
             region_ids.append(region.id)
             if region.graphical_metadata is not None:
                 metadata = region.graphical_metadata
-                tag_ids.append(metadata.tag_id)
 
-                if metadata.caption_lines_metadata is not None:
+                if check_tag_source(alto, metadata.tag_id, "LayoutTag"):
+                    tag_ids.append(metadata.tag_id)
+
+                if metadata.caption_lines_metadata is not None and check_tag_source(alto, metadata.caption_lines_metadata.tag_id, "StructureTag"):
                     caption_tag_ids.append(metadata.caption_lines_metadata.tag_id)
 
-                if metadata.reference_lines_metadata is not None:
+                if metadata.reference_lines_metadata is not None and check_tag_source(alto, metadata.reference_lines_metadata.tag_id, "OtherTag"):
                     reference_tag_ids.append(metadata.reference_lines_metadata.tag_id)
 
     for region_id in region_ids:
