@@ -11,6 +11,7 @@ from anno_page.engines import BaseEngine, LayoutProcessingEngine
 from anno_page.engines.helpers import config_get_dtype
 from anno_page.enums import Category, Language
 from anno_page.core.embedding import ObjectEmbedding, ProcessingInfo
+from anno_page.core.layout import AnnoPageRegionLayout
 
 
 class HuggingfaceImageEmbeddingEngine(LayoutProcessingEngine):
@@ -30,7 +31,7 @@ class HuggingfaceImageEmbeddingEngine(LayoutProcessingEngine):
 
     def process_page(self, page_image, page_layout):
         for region in page_layout.regions:
-            if region.category is None or region.category.lower() == "text":
+            if not isinstance(region, AnnoPageRegionLayout):
                 continue
 
             if self.categories is None or region.category.lower() in self.categories:

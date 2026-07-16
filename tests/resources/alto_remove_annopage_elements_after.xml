@@ -1,0 +1,67 @@
+<?xml version='1.0' encoding='utf-8'?>
+<alto xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:mods="http://www.loc.gov/mods/v3"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/standards/alto/ns-v4#">
+    <Description>
+        <MeasurementUnit>pixel</MeasurementUnit>
+        <sourceImageInformation>
+            <fileName>test_page</fileName>
+        </sourceImageInformation>
+        <Processing ID="IdOcr">
+            <processingDateTime>1970-01-01T12:00:00</processingDateTime>
+            <processingSoftware>
+                <softwareCreator>Project PERO</softwareCreator>
+                <softwareName>PERO OCR</softwareName>
+                <softwareVersion>v0.1.0</softwareVersion>
+            </processingSoftware>
+        </Processing>
+        <Processing ID="AnnoPage">
+            <processingDateTime>1970-01-01T12:00:00</processingDateTime>
+            <processingSoftware>
+                <softwareCreator>Orbis Pictus</softwareCreator>
+                <softwareName>AnnoPage</softwareName>
+                <softwareVersion>0.0.1</softwareVersion>
+            </processingSoftware>
+        </Processing>
+    </Description>
+    <Tags/>
+    <Layout>
+        <Page ID="id_test_page" PHYSICAL_IMG_NR="1" HEIGHT="297" WIDTH="210">
+            <TopMargin HEIGHT="20" WIDTH="210" VPOS="0" HPOS="0"/>
+            <LeftMargin HEIGHT="297" WIDTH="10" VPOS="0" HPOS="0"/>
+            <RightMargin HEIGHT="297" WIDTH="0" VPOS="0" HPOS="210"/>
+            <BottomMargin HEIGHT="0" WIDTH="210" VPOS="297" HPOS="0"/>
+            <PrintSpace HEIGHT="277" WIDTH="200" VPOS="20" HPOS="10">
+                <TextBlock ID="block_text_region" HEIGHT="80" WIDTH="190" VPOS="120" HPOS="10">
+                    <TextLine ID="line_line1" BASELINE="10,135 200,135" VPOS="120" HPOS="10" HEIGHT="20" WIDTH="190">
+                        <String CONTENT="This" HEIGHT="20" WIDTH="40" VPOS="120" HPOS="10"/>
+                        <String CONTENT="is" HEIGHT="20" WIDTH="40" VPOS="120" HPOS="50"/>
+                        <String CONTENT="line" HEIGHT="20" WIDTH="40" VPOS="120" HPOS="90"/>
+                        <String CONTENT="no." HEIGHT="20" WIDTH="40" VPOS="120" HPOS="130"/>
+                        <String CONTENT="1." HEIGHT="20" WIDTH="40" VPOS="120" HPOS="170"/>
+                    </TextLine>
+                    <TextLine ID="line_line2" BASELINE="10,155 200,155" VPOS="140" HPOS="10" HEIGHT="20" WIDTH="190">
+                        <String CONTENT="This" HEIGHT="20" WIDTH="40" VPOS="140" HPOS="10"/>
+                        <String CONTENT="is" HEIGHT="20" WIDTH="40" VPOS="140" HPOS="50"/>
+                        <String CONTENT="line" HEIGHT="20" WIDTH="40" VPOS="140" HPOS="90"/>
+                        <String CONTENT="no." HEIGHT="20" WIDTH="40" VPOS="140" HPOS="130"/>
+                        <String CONTENT="2." HEIGHT="20" WIDTH="40" VPOS="140" HPOS="170"/>
+                    </TextLine>
+                    <TextLine ID="line_line3" BASELINE="10,175 200,175" VPOS="160" HPOS="10" HEIGHT="20" WIDTH="190">
+                        <String CONTENT="This" HEIGHT="20" WIDTH="40" VPOS="160" HPOS="10"/>
+                        <String CONTENT="is" HEIGHT="20" WIDTH="40" VPOS="160" HPOS="50"/>
+                        <String CONTENT="line" HEIGHT="20" WIDTH="40" VPOS="160" HPOS="90"/>
+                        <String CONTENT="no." HEIGHT="20" WIDTH="40" VPOS="160" HPOS="130"/>
+                        <String CONTENT="3." HEIGHT="20" WIDTH="40" VPOS="160" HPOS="170"/>
+                    </TextLine>
+                    <TextLine ID="line_line4" BASELINE="10,195 200,195" VPOS="180" HPOS="10" HEIGHT="20" WIDTH="190">
+                        <String CONTENT="This" HEIGHT="20" WIDTH="40" VPOS="180" HPOS="10"/>
+                        <String CONTENT="is" HEIGHT="20" WIDTH="40" VPOS="180" HPOS="50"/>
+                        <String CONTENT="line" HEIGHT="20" WIDTH="40" VPOS="180" HPOS="90"/>
+                        <String CONTENT="no." HEIGHT="20" WIDTH="40" VPOS="180" HPOS="130"/>
+                        <String CONTENT="4." HEIGHT="20" WIDTH="40" VPOS="180" HPOS="170"/>
+                    </TextLine>
+                </TextBlock>
+            </PrintSpace>
+        </Page>
+    </Layout>
+</alto>

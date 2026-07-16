@@ -1,16 +1,16 @@
 import cv2
 import numpy as np
-from typing import Tuple
 
+from io import BytesIO
+from typing import Tuple
 from lxml import etree as ET
 from lxml.etree import Element
+
 from pero_ocr.core.layout import RegionLayout, PageLayout, create_ocr_processing_element, ALTOVersion
 
 from anno_page import globals
 from anno_page.enums import Category
 from anno_page.core.metadata import GraphicalObjectMetadata
-from anno_page.core.utils import find_textline_by_geometry_and_content
-from anno_page.core.utils import find_textline
 
 
 class AnnoPageRegionLayout(RegionLayout):
@@ -45,15 +45,99 @@ class AnnoPageRegionLayout(RegionLayout):
         print_space_width = print_space_width - print_space_hpos
 
         if self.graphical_metadata is not None:
+            if self.graphical_metadata.confidence is None:
+                self.graphical_metadata.confidence = self.detection_confidence
+
             self.graphical_metadata.to_altoxml(tags,
                                                category=self.category,
                                                bounding_box=bounding_box,
-                                               confidence=self.detection_confidence,
                                                mods_namespace=mods_namespace)
 
             composed_block_element.set("TAGREFS", self.graphical_metadata.tag_id)
 
         return print_space_height, print_space_width, print_space_vpos, print_space_hpos
+
+    @classmethod
+    def from_altoxml(cls, composed_block_element):
+        category = composed_block_element.attrib.get("TYPE", None)
+        if category is None:
+            return None
+
+        height = composed_block_element.attrib.get("HEIGHT", None)
+        width = composed_block_element.attrib.get("WIDTH", None)
+        vpos = composed_block_element.attrib.get("VPOS", None)
+        hpos = composed_block_element.attrib.get("HPOS", None)
+
+        if None in (height, width, vpos, hpos):
+            return None
+
+        height = int(height)
+        width = int(width)
+        vpos = int(vpos)
+        hpos = int(hpos)
+
+        if not cls.check_graphical_element_exists(composed_block_element, height, width, vpos, hpos):
+            return None
+
+        region_coords = [[hpos, vpos], [hpos + width, vpos], [hpos + width, vpos + height], [hpos, vpos + height]]
+        region_coords = np.array(region_coords)
+
+        region_id = composed_block_element.attrib["ID"]
+
+        region = cls(region_id, region_coords, category=category)
+
+        return region
+
+    @staticmethod
+    def check_graphical_element_exists(composed_block_element, composed_block_height, composed_block_width, composed_block_vpos, composed_block_hpos):
+        composed_block_children = composed_block_element.getchildren()
+        if len(composed_block_children) == 1 and composed_block_children[0].tag.endswith("GraphicalElement"):
+            graphical_element = composed_block_children[0]
+            graphical_element_height = int(graphical_element.attrib.get("HEIGHT", 0))
+            graphical_element_width = int(graphical_element.attrib.get("WIDTH", 0))
+            graphical_element_vpos = int(graphical_element.attrib.get("VPOS", 0))
+            graphical_element_hpos = int(graphical_element.attrib.get("HPOS", 0))
+
+            if (graphical_element_height == composed_block_height and
+                graphical_element_width == composed_block_width and
+                graphical_element_vpos == composed_block_vpos and
+                graphical_element_hpos == composed_block_hpos):
+                return True
+
+        return False
+
+
+class AnnoPagePageLayout(PageLayout):
+    def __init__(self, id, page_size):
+        super().__init__(id, page_size)
+
+        self.from_altoxml_ended += alto_load_regions
+        self.to_altoxml_processing_added += alto_add_processing_step
+        self.to_altoxml_regions_ended += alto_postprocess_lines
+
+
+def alto_load_regions(page_layout, root):
+    print_space_element = root.find(".//PrintSpace", root.nsmap)
+    if print_space_element is None:
+        return
+
+    tags_element = root.find(".//Tags", root.nsmap)
+
+    for composed_block_element in print_space_element.findall(".//ComposedBlock", print_space_element.nsmap):
+        region = AnnoPageRegionLayout.from_altoxml(composed_block_element)
+        if region is not None:
+            page_layout.regions.append(region)
+
+            tagrefs = composed_block_element.attrib.get("TAGREFS", None)
+            if tagrefs is not None:
+                tagrefs = tagrefs.split()
+                for tagref in tagrefs:
+                    tag_element = tags_element.find(f".//{{*}}LayoutTag[@ID='{tagref}']", tags_element.nsmap)
+                    if tag_element is not None:
+                        metadata = GraphicalObjectMetadata.from_altoxml(page_layout, tag_element, tags_element, print_space_element)
+                        if metadata is not None:
+                            region.graphical_metadata = metadata
+                            region.detection_confidence = metadata.confidence
 
 
 def get_page_element(print_space_element):
@@ -89,7 +173,7 @@ def set_position_and_size(block, bounding_box):
     block.set("HPOS", str(round(x_min)))
 
 
-def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_version=ALTOVersion.ALTO_v4_4):
+def add_page_layout_to_alto(page_layout: AnnoPagePageLayout, alto_root: Element, alto_version=ALTOVersion.ALTO_v4_4):
     namespaces = alto_root.nsmap
     mods_namespace = namespaces.get("mods", None)
     if mods_namespace is None:
@@ -107,16 +191,84 @@ def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_ve
     print_space_coords = get_print_space_coords(page_layout, print_space_element)
 
     for region in page_layout.regions:
-        if region.category in (None, "text"):
-            continue
-
-        print_space_coords = region.to_altoxml(print_space_element, tags_element, mods_namespace, None, 0.0, print_space_coords, alto_version)
+        if isinstance(region, AnnoPageRegionLayout):
+            print_space_coords = region.to_altoxml(print_space_element, tags_element, mods_namespace, None, 0.0, print_space_coords, alto_version)
 
     update_print_space_and_margins(page_layout, page_element, print_space_coords)
 
     alto_postprocess_lines(page_layout, print_space_element, alto_version)
 
     return alto_root
+
+
+def remove_element(alto, element_specification):
+    element = alto.find(element_specification, namespaces=alto.nsmap)
+    if element is not None:
+        parent = element.getparent()
+        parent.remove(element)
+
+    return alto
+
+
+def remove_tagrefs(alto, tag_id):
+    elements = alto.xpath(
+        '//*[@TAGREFS and contains(concat(" ", normalize-space(@TAGREFS), " "), '
+        'concat(" ", $tag, " "))]',
+        tag=tag_id,
+    )
+
+    for element in elements:
+        tagrefs = element.attrib.get("TAGREFS", "")
+        tagrefs_list = tagrefs.split()
+        tagrefs_list = [tag for tag in tagrefs_list if tag != tag_id]
+        if tagrefs_list:
+            element.attrib["TAGREFS"] = " ".join(tagrefs_list)
+        else:
+            del element.attrib["TAGREFS"]
+
+    return alto
+
+
+def remove_annopage_elements(alto):
+    alto_bytes_io = BytesIO(ET.tostring(alto, encoding="utf-8", xml_declaration=True))
+
+    page_layout = AnnoPagePageLayout(id="temp", page_size=(0, 0))
+    page_layout.from_altoxml(alto_bytes_io)
+
+    region_ids = []
+    tag_ids = []
+    caption_tag_ids = []
+    reference_tag_ids = []
+
+    for region in page_layout.regions:
+        if isinstance(region, AnnoPageRegionLayout):
+            region_ids.append(region.id)
+            if region.graphical_metadata is not None:
+                metadata = region.graphical_metadata
+                tag_ids.append(metadata.tag_id)
+
+                if metadata.caption_lines_metadata is not None:
+                    caption_tag_ids.append(metadata.caption_lines_metadata.tag_id)
+
+                if metadata.reference_lines_metadata is not None:
+                    reference_tag_ids.append(metadata.reference_lines_metadata.tag_id)
+
+    for region_id in region_ids:
+        alto = remove_element(alto, f".//ComposedBlock[@ID='{region_id}']")
+
+    for tag_id in tag_ids:
+        alto = remove_element(alto, f".//LayoutTag[@ID='{tag_id}']")
+        alto = remove_tagrefs(alto, tag_id)
+
+    for caption_tag_id in caption_tag_ids:
+        alto = remove_element(alto, f".//StructureTag[@ID='{caption_tag_id}']")
+        alto = remove_tagrefs(alto, caption_tag_id)
+
+    for reference_tag_id in reference_tag_ids:
+        alto = remove_element(alto, f".//OtherTag[@ID='{reference_tag_id}']")
+        alto = remove_tagrefs(alto, reference_tag_id)
+
+    return alto
 
 
 def get_print_space_coords(page_layout, print_space_element):
@@ -227,11 +379,6 @@ def alto_add_processing_step(page_layout, description_element: ET.Element, alto_
                                                        alto_version=alto_version)
 
     description_element.append(processing_element)
-
-
-def set_handlers(page_layout):
-    page_layout.to_altoxml_processing_added += alto_add_processing_step
-    page_layout.to_altoxml_regions_ended += alto_postprocess_lines
 
 
 def render_to_image(image, page_layout):
