@@ -13,13 +13,21 @@ logger = logging.getLogger(__name__)
 
 
 class BaseMetadata:
-    def __init__(self, tag_id, mods_id, mods_uuid=None, record_identifier=None, used_ai_models=None, creation_date_time=None):
+    def __init__(self,
+                 tag_id,
+                 mods_id,
+                 mods_uuid=None,
+                 record_identifier=None,
+                 used_ai_models=None,
+                 creation_date_time=None,
+                 confidence=None):
         self.tag_id = tag_id
         self.mods_id = mods_id
         self.mods_uuid = str(UuidService.generate_uuid()) if mods_uuid is None else mods_uuid
         self.record_identifier = str(UuidService.generate_uuid()) if record_identifier is None else record_identifier
         self.used_ai_models = used_ai_models if used_ai_models is not None else {}
         self.creation_date_time = creation_date_time
+        self.confidence = confidence
 
     @staticmethod
     def _add_genre_element(mods, mods_namespace, language, content, genre_type=None):
@@ -120,7 +128,8 @@ class BaseMetadata:
             "mods_uuid": str(self.mods_uuid),
             "record_identifier": str(self.record_identifier),
             "used_ai_models": self.used_ai_models,
-            "creation_date_time": self.creation_date_time
+            "creation_date_time": self.creation_date_time,
+            "confidence": self.confidence
         }
 
 
@@ -141,7 +150,7 @@ class RelatedLinesMetadata(BaseMetadata):
         self.description = description
         self.title = title
 
-    def to_altoxml(self, tags, mods_namespace, confidence, related_mods_id=None):
+    def to_altoxml(self, tags, mods_namespace, related_mods_id=None):
         if self.relation == LineRelation.REFERENCE:
             values = {
                 "tag": "OtherTag",
@@ -201,7 +210,7 @@ class RelatedLinesMetadata(BaseMetadata):
                                       mods_namespace,
                                       creation_date_time=creation_date_time,
                                       record_identifier=self.record_identifier,
-                                      confidence=confidence,
+                                      confidence=self.confidence,
                                       used_ai_models=self.used_ai_models)
 
     @classmethod
@@ -459,16 +468,16 @@ class GraphicalObjectMetadata(BaseMetadata):
             else:
                 self.reference_lines_metadata = other.reference_lines_metadata
 
-    def to_altoxml(self, tags, mods_namespace, category, bounding_box, confidence):
-        self.graphics_to_altoxml(tags, mods_namespace, category, bounding_box, confidence)
+    def to_altoxml(self, tags, mods_namespace, category, bounding_box):
+        self.graphics_to_altoxml(tags, mods_namespace, category, bounding_box)
 
         if self.caption_lines_metadata is not None:
-            self.caption_lines_metadata.to_altoxml(tags, mods_namespace, confidence, self.mods_id)
+            self.caption_lines_metadata.to_altoxml(tags, mods_namespace, self.mods_id)
 
         if self.reference_lines_metadata is not None:
-            self.reference_lines_metadata.to_altoxml(tags, mods_namespace, confidence, self.mods_id)
+            self.reference_lines_metadata.to_altoxml(tags, mods_namespace, self.mods_id)
 
-    def graphics_to_altoxml(self, tags, mods_namespace, category, bounding_box, confidence):
+    def graphics_to_altoxml(self, tags, mods_namespace, category, bounding_box):
         layout_tag = ET.SubElement(tags, "LayoutTag")
         xml_data = ET.SubElement(layout_tag, "XmlData")
         mods = ET.SubElement(xml_data, f"{{{mods_namespace}}}mods")
@@ -528,7 +537,7 @@ class GraphicalObjectMetadata(BaseMetadata):
                                       mods_namespace,
                                       creation_date_time=creation_date_time,
                                       record_identifier=self.record_identifier,
-                                      confidence=confidence,
+                                      confidence=self.confidence,
                                       used_ai_models=self.used_ai_models)
 
     @staticmethod
@@ -721,6 +730,7 @@ class GraphicalObjectMetadata(BaseMetadata):
         mods_uuid = self.from_altoxml_mods_uuid(mods_data)
         record_identifier = self.from_altoxml_mods_record_identifier(mods_data)
         used_ai_models = self.from_altoxml_mods_used_ai_models(mods_data)
+        confidence = self.from_altoxml_mods_confidence(mods_data)
         creation_date_time = self.from_altoxml_mods_creation_date_time(mods_data)
 
         self.description = description
@@ -915,6 +925,7 @@ class GraphicalObjectMetadata(BaseMetadata):
     @staticmethod
     def from_altoxml_mods_used_ai_models(mods_data):
         record_info_note_elements = mods_data.findall("mods:recordInfo/mods:recordInfoNote", mods_data.nsmap)
+        record_info_note_elements = [note for note in record_info_note_elements if note.attrib.get("type", None) != "confidence"]
         if not record_info_note_elements:
             return None
 
@@ -930,6 +941,20 @@ class GraphicalObjectMetadata(BaseMetadata):
                 used_ai_models[model_type] = text
 
         return used_ai_models if len(used_ai_models) > 0 else None
+
+    @staticmethod
+    def from_altoxml_mods_confidence(mods_data):
+        record_info_note_elements = mods_data.findall("mods:recordInfo/mods:recordInfoNote[@type='confidence']", mods_data.nsmap)
+
+        confidence = None
+        for note in record_info_note_elements:
+            if note.text:
+                try:
+                    confidence = float(note.text.strip())
+                except ValueError:
+                    continue
+
+        return confidence
 
     @staticmethod
     def from_altoxml_mods_creation_date_time(mods_data):
