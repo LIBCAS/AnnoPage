@@ -45,10 +45,12 @@ class AnnoPageRegionLayout(RegionLayout):
         print_space_width = print_space_width - print_space_hpos
 
         if self.graphical_metadata is not None:
+            if self.graphical_metadata.confidence is None:
+                self.graphical_metadata.confidence = self.detection_confidence
+
             self.graphical_metadata.to_altoxml(tags,
                                                category=self.category,
                                                bounding_box=bounding_box,
-                                               confidence=self.detection_confidence,
                                                mods_namespace=mods_namespace)
 
             composed_block_element.set("TAGREFS", self.graphical_metadata.tag_id)
