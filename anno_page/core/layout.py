@@ -56,6 +56,15 @@ class AnnoPageRegionLayout(RegionLayout):
         return print_space_height, print_space_width, print_space_vpos, print_space_hpos
 
 
+class AnnoPagePageLayout(PageLayout):
+    def __init__(self, id, page_size):
+        super().__init__(id, page_size)
+
+        self.from_altoxml_ended += alto_load_regions
+        self.to_altoxml_processing_added += alto_add_processing_step
+        self.to_altoxml_regions_ended += alto_postprocess_lines
+
+
 def get_page_element(print_space_element):
     page_element = print_space_element
     while not (page_element.tag == "Page" or page_element.tag.endswith("}Page")):
@@ -89,7 +98,7 @@ def set_position_and_size(block, bounding_box):
     block.set("HPOS", str(round(x_min)))
 
 
-def add_page_layout_to_alto(page_layout: PageLayout, alto_root: Element, alto_version=ALTOVersion.ALTO_v4_4):
+def add_page_layout_to_alto(page_layout: AnnoPagePageLayout, alto_root: Element, alto_version=ALTOVersion.ALTO_v4_4):
     namespaces = alto_root.nsmap
     mods_namespace = namespaces.get("mods", None)
     if mods_namespace is None:
