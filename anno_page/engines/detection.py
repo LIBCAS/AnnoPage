@@ -56,8 +56,10 @@ class YoloDetectionEngine(LayoutProcessingEngine):
 
     @staticmethod
     def get_next_region_id(page_layout, category, prefix, padding=3):
-        existing_region_ids = set([region.id for region in page_layout.regions])
-        existing_tag_ids = set([region.graphical_metadata.tag_id for region in page_layout.regions if region.graphical_metadata and region.graphical_metadata.tag_id])
+        regions = [region for region in page_layout.regions if isinstance(region, AnnoPageRegionLayout)]
+
+        existing_region_ids = set([region.id for region in regions])
+        existing_tag_ids = set([region.graphical_metadata.tag_id for region in regions if region.graphical_metadata and region.graphical_metadata.tag_id])
 
         existing_ids = existing_region_ids | existing_tag_ids
 
@@ -72,7 +74,8 @@ class YoloDetectionEngine(LayoutProcessingEngine):
     
     @staticmethod
     def get_next_mods_id(page_layout, prefix="MODS_PICT", padding=4):
-        existing_mods_ids = set([region.graphical_metadata.mods_id for region in page_layout.regions if region.graphical_metadata and region.graphical_metadata.mods_id])
+        regions = [region for region in page_layout.regions if isinstance(region, AnnoPageRegionLayout)]
+        existing_mods_ids = set([region.graphical_metadata.mods_id for region in regions if region.graphical_metadata and region.graphical_metadata.mods_id])
 
         index = 1
         new_id = f"{prefix}_{str(index).zfill(padding)}"

@@ -37,7 +37,7 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
     def process_page(self, page_image, page_layout):
         if self.clear_metadata_before_processing:
             for region in page_layout.regions:
-                if region.graphical_metadata is not None:
+                if isinstance(region, AnnoPageRegionLayout) and region.graphical_metadata is not None:
                     region.graphical_metadata.title = None
                     region.graphical_metadata.caption_lines_metadata = None
                     region.graphical_metadata.used_ai_models.pop("caption-detection", None)
@@ -89,7 +89,7 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
     def process_page(self, page_image, page_layout):
         if self.clear_metadata_before_processing:
             for region in page_layout.regions:
-                if region.graphical_metadata is not None:
+                if isinstance(region, AnnoPageRegionLayout) and region.graphical_metadata is not None:
                     region.graphical_metadata.title = None
                     region.graphical_metadata.caption_lines_metadata = None
                     region.graphical_metadata.used_ai_models.pop("caption-detection", None)
@@ -159,7 +159,7 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
     def process_page(self, page_image, page_layout):
         if self.clear_metadata_before_processing:
             for region in page_layout.regions:
-                if region.graphical_metadata is not None:
+                if isinstance(region, AnnoPageRegionLayout) and region.graphical_metadata is not None:
                     region.graphical_metadata.title = None
                     region.graphical_metadata.caption_lines_metadata = None
                     region.graphical_metadata.used_ai_models.pop("caption-detection", None)

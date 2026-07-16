@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 from io import BytesIO
-from typing import Tuple
+from typing import Tuple, Optional
 from lxml import etree as ET
 from lxml.etree import Element
 
@@ -14,6 +14,21 @@ from anno_page.core.metadata import GraphicalObjectMetadata
 
 
 class AnnoPageRegionLayout(RegionLayout):
+    def __init__(self,
+                 id: str,
+                 polygon: np.ndarray,
+                 region_type: Optional[str] = None,
+                 category: Optional[str] = None,
+                 detection_confidence: Optional[float] = None,
+                 graphical_metadata: Optional[GraphicalObjectMetadata] = None):
+        super().__init__(id=id,
+                         polygon=polygon,
+                         region_type=region_type,
+                         category=category,
+                         detection_confidence=detection_confidence)
+
+        self.graphical_metadata: Optional[GraphicalObjectMetadata] = graphical_metadata
+
     def to_altoxml(self, print_space_element, tags, mods_namespace, arabic_helper, min_line_confidence,
                    print_space_coords: Tuple[int, int, int, int], version: ALTOVersion, word_splitters=["-"]) -> Tuple[int, int, int, int]:
         category = Category.from_string(self.category)
@@ -350,7 +365,7 @@ def find_or_create_element(parent_element, tag, namespaces=None):
 
 def alto_postprocess_lines(page_layout, print_space_element, alto_version=ALTOVersion.ALTO_v4_4):
     for region in page_layout.regions:
-        if region.category in (None, "text"):
+        if not isinstance(region, AnnoPageRegionLayout):
             continue
 
         if region.graphical_metadata is not None:
