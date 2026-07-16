@@ -5,13 +5,12 @@ from io import BytesIO
 from typing import Tuple
 from lxml import etree as ET
 from lxml.etree import Element
+
 from pero_ocr.core.layout import RegionLayout, PageLayout, create_ocr_processing_element, ALTOVersion
 
 from anno_page import globals
 from anno_page.enums import Category
 from anno_page.core.metadata import GraphicalObjectMetadata
-from anno_page.core.utils import find_textline_by_geometry_and_content
-from anno_page.core.utils import find_textline
 
 
 class AnnoPageRegionLayout(RegionLayout):
@@ -378,11 +377,6 @@ def alto_add_processing_step(page_layout, description_element: ET.Element, alto_
                                                        alto_version=alto_version)
 
     description_element.append(processing_element)
-
-
-def set_handlers(page_layout):
-    page_layout.to_altoxml_processing_added += alto_add_processing_step
-    page_layout.to_altoxml_regions_ended += alto_postprocess_lines
 
 
 def render_to_image(image, page_layout):
