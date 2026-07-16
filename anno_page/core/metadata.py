@@ -8,7 +8,6 @@ from anno_page import globals
 from anno_page.enums import Category, Language, LineRelation
 from anno_page.enums.language import language_to_string_mapping, language_to_string_mapping_reversed
 from anno_page.core.services import UuidService, DateTimeService
-from setuptools import namespaces
 
 logger = logging.getLogger(__name__)
 
