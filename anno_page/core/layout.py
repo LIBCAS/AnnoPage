@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
-from typing import Tuple
 
+from io import BytesIO
+from typing import Tuple
 from lxml import etree as ET
 from lxml.etree import Element
 from pero_ocr.core.layout import RegionLayout, PageLayout, create_ocr_processing_element, ALTOVersion
@@ -199,6 +200,76 @@ def add_page_layout_to_alto(page_layout: AnnoPagePageLayout, alto_root: Element,
     alto_postprocess_lines(page_layout, print_space_element, alto_version)
 
     return alto_root
+
+
+def remove_element(alto, element_specification):
+    element = alto.find(element_specification, namespaces=alto.nsmap)
+    if element is not None:
+        parent = element.getparent()
+        parent.remove(element)
+
+    return alto
+
+
+def remove_tagrefs(alto, tag_id):
+    elements = alto.xpath(
+        '//*[@TAGREFS and contains(concat(" ", normalize-space(@TAGREFS), " "), '
+        'concat(" ", $tag, " "))]',
+        tag=tag_id,
+    )
+
+    for element in elements:
+        tagrefs = element.attrib.get("TAGREFS", "")
+        tagrefs_list = tagrefs.split()
+        tagrefs_list = [tag for tag in tagrefs_list if tag != tag_id]
+        if tagrefs_list:
+            element.attrib["TAGREFS"] = " ".join(tagrefs_list)
+        else:
+            del element.attrib["TAGREFS"]
+
+    return alto
+
+
+def remove_annopage_elements(alto):
+    alto_bytes_io = BytesIO(ET.tostring(alto, encoding="utf-8", xml_declaration=True))
+
+    page_layout = AnnoPagePageLayout(id="temp", page_size=(0, 0))
+    page_layout.from_altoxml(alto_bytes_io)
+
+    region_ids = []
+    tag_ids = []
+    caption_tag_ids = []
+    reference_tag_ids = []
+
+    for region in page_layout.regions:
+        if isinstance(region, AnnoPageRegionLayout):
+            region_ids.append(region.id)
+            if region.graphical_metadata is not None:
+                metadata = region.graphical_metadata
+                tag_ids.append(metadata.tag_id)
+
+                if metadata.caption_lines_metadata is not None:
+                    caption_tag_ids.append(metadata.caption_lines_metadata.tag_id)
+
+                if metadata.reference_lines_metadata is not None:
+                    reference_tag_ids.append(metadata.reference_lines_metadata.tag_id)
+
+    for region_id in region_ids:
+        alto = remove_element(alto, f".//ComposedBlock[@ID='{region_id}']")
+
+    for tag_id in tag_ids:
+        alto = remove_element(alto, f".//LayoutTag[@ID='{tag_id}']")
+        alto = remove_tagrefs(alto, tag_id)
+
+    for caption_tag_id in caption_tag_ids:
+        alto = remove_element(alto, f".//StructureTag[@ID='{caption_tag_id}']")
+        alto = remove_tagrefs(alto, caption_tag_id)
+
+    for reference_tag_id in reference_tag_ids:
+        alto = remove_element(alto, f".//OtherTag[@ID='{reference_tag_id}']")
+        alto = remove_tagrefs(alto, reference_tag_id)
+
+    return alto
 
 
 def get_print_space_coords(page_layout, print_space_element):
