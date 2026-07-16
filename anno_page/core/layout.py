@@ -55,6 +55,55 @@ class AnnoPageRegionLayout(RegionLayout):
 
         return print_space_height, print_space_width, print_space_vpos, print_space_hpos
 
+    @classmethod
+    def from_altoxml(cls, composed_block_element):
+        category = composed_block_element.attrib.get("TYPE", None)
+        if category is None:
+            return None
+
+        height = composed_block_element.attrib.get("HEIGHT", None)
+        width = composed_block_element.attrib.get("WIDTH", None)
+        vpos = composed_block_element.attrib.get("VPOS", None)
+        hpos = composed_block_element.attrib.get("HPOS", None)
+
+        if None in (height, width, vpos, hpos):
+            return None
+
+        height = int(height)
+        width = int(width)
+        vpos = int(vpos)
+        hpos = int(hpos)
+
+        if not cls.check_graphical_element_exists(composed_block_element, height, width, vpos, hpos):
+            return None
+
+        region_coords = [[hpos, vpos], [hpos + width, vpos], [hpos + width, vpos + height], [hpos, vpos + height]]
+        region_coords = np.array(region_coords)
+
+        region_id = composed_block_element.attrib["ID"]
+
+        region = cls(region_id, region_coords, category=category)
+
+        return region
+
+    @staticmethod
+    def check_graphical_element_exists(composed_block_element, composed_block_height, composed_block_width, composed_block_vpos, composed_block_hpos):
+        composed_block_children = composed_block_element.getchildren()
+        if len(composed_block_children) == 1 and composed_block_children[0].tag.endswith("GraphicalElement"):
+            graphical_element = composed_block_children[0]
+            graphical_element_height = int(graphical_element.attrib.get("HEIGHT", 0))
+            graphical_element_width = int(graphical_element.attrib.get("WIDTH", 0))
+            graphical_element_vpos = int(graphical_element.attrib.get("VPOS", 0))
+            graphical_element_hpos = int(graphical_element.attrib.get("HPOS", 0))
+
+            if (graphical_element_height == composed_block_height and
+                graphical_element_width == composed_block_width and
+                graphical_element_vpos == composed_block_vpos and
+                graphical_element_hpos == composed_block_hpos):
+                return True
+
+        return False
+
 
 class AnnoPagePageLayout(PageLayout):
     def __init__(self, id, page_size):
@@ -63,6 +112,30 @@ class AnnoPagePageLayout(PageLayout):
         self.from_altoxml_ended += alto_load_regions
         self.to_altoxml_processing_added += alto_add_processing_step
         self.to_altoxml_regions_ended += alto_postprocess_lines
+
+
+def alto_load_regions(page_layout, root):
+    print_space_element = root.find(".//PrintSpace", root.nsmap)
+    if print_space_element is None:
+        return
+
+    tags_element = root.find(".//Tags", root.nsmap)
+
+    for composed_block_element in print_space_element.findall(".//ComposedBlock", print_space_element.nsmap):
+        region = AnnoPageRegionLayout.from_altoxml(composed_block_element)
+        if region is not None:
+            page_layout.regions.append(region)
+
+            tagrefs = composed_block_element.attrib.get("TAGREFS", None)
+            if tagrefs is not None:
+                tagrefs = tagrefs.split()
+                for tagref in tagrefs:
+                    tag_element = tags_element.find(f".//{{*}}LayoutTag[@ID='{tagref}']", tags_element.nsmap)
+                    if tag_element is not None:
+                        metadata = GraphicalObjectMetadata.from_altoxml(page_layout, tag_element, tags_element, print_space_element)
+                        if metadata is not None:
+                            region.graphical_metadata = metadata
+                            region.detection_confidence = metadata.confidence
 
 
 def get_page_element(print_space_element):
