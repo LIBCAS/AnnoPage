@@ -5,11 +5,11 @@ import numpy as np
 
 from configparser import ConfigParser
 
-from pero_ocr.core.layout import PageLayout, RegionLayout, TextLine, ALTOVersion
+from pero_ocr.core.layout import RegionLayout, TextLine, ALTOVersion
 from pero_ocr.core.services import UuidService as PeroOcrUuidService, DateTimeService as PeroOcrDateTimeService
 
 from anno_page.enums import Language, LineRelation
-from anno_page.core.layout import set_handlers, AnnoPageRegionLayout
+from anno_page.core.layout import AnnoPagePageLayout, AnnoPageRegionLayout
 from anno_page.core.metadata import GraphicalObjectMetadata
 from anno_page.core.services import UuidService as AnnoPageUuidService, DateTimeService as AnnoPageDateTimeService
 from anno_page.engines.initial import InitialRecognitionEngine, InitialRecognitionResult, LLMResult
@@ -121,14 +121,13 @@ def test_alto_initial_no_space():
     text_region_1.lines = lines[:2]
     text_region_2.lines = lines[2:]
 
-    page_layout = PageLayout(id="test_page", page_size=(297, 210))
+    page_layout = AnnoPagePageLayout(id="test_page", page_size=(297, 210))
     page_layout.regions.append(text_region_1)
     page_layout.regions.append(text_region_2)
     page_layout.regions.append(initial_region)
 
     page_layout = engine.process_page(None, page_layout)
 
-    set_handlers(page_layout)
     generated_alto = page_layout.to_altoxml_string(version=ALTOVersion.ALTO_v4_4)
 
     assert_xml_equal(generated_alto, expected_alto)
@@ -231,14 +230,13 @@ def test_alto_initial_with_space():
     text_region_1.lines = lines[:2]
     text_region_2.lines = lines[2:]
 
-    page_layout = PageLayout(id="test_page", page_size=(297, 210))
+    page_layout = AnnoPagePageLayout(id="test_page", page_size=(297, 210))
     page_layout.regions.append(text_region_1)
     page_layout.regions.append(text_region_2)
     page_layout.regions.append(initial_region)
 
     page_layout = engine.process_page(None, page_layout)
 
-    set_handlers(page_layout)
     generated_alto = page_layout.to_altoxml_string(version=ALTOVersion.ALTO_v4_4)
 
     assert_xml_equal(generated_alto, expected_alto)
