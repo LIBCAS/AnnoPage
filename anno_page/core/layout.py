@@ -1,4 +1,5 @@
 import cv2
+import json
 import numpy as np
 
 from io import BytesIO
@@ -9,6 +10,7 @@ from lxml.etree import Element
 from pero_ocr.core.layout import RegionLayout, PageLayout, create_ocr_processing_element, ALTOVersion
 
 from anno_page import globals
+from anno_page.core.services import DateTimeService
 from anno_page.enums import Category
 from anno_page.core.metadata import GraphicalObjectMetadata
 
@@ -121,17 +123,83 @@ class AnnoPageRegionLayout(RegionLayout):
 
         return False
 
+    def to_pagexml(self, page_element: ET.SubElement, validate_id: bool = False):
+        custom = {
+            "category": self.category,
+            "detection_confidence": round(self.detection_confidence, 3),
+            "metadata": self.graphical_metadata.to_dict() if self.graphical_metadata is not None else None
+        }
+
+        region_element = ET.SubElement(page_element, "ImageRegion")
+        region_element.attrib["id"] = self.id
+        region_element.attrib["custom"] = json.dumps(custom)
+
+        if self.region_type is not None:
+            region_element.attrib["type"] = self.region_type
+
+        coords = ET.SubElement(region_element, "Coords")
+        coords.attrib["points"] = " ".join([f"{int(x)},{int(y)}" for x, y in self.polygon])
+
+        return region_element
+
+    @classmethod
+    def from_pagexml(cls, region_element: ET.SubElement, page_layout=None):
+        region_id = region_element.attrib["id"]
+        region_type = region_element.attrib.get("type", None)
+
+        polygon = []
+        coords_element = region_element.find("Coords", region_element.nsmap)
+        if coords_element is not None:
+            points_str = coords_element.attrib.get("points", "")
+            for point_str in points_str.split():
+                x_str, y_str = point_str.split(",")
+                polygon.append((float(x_str), float(y_str)))
+
+        polygon = np.array(polygon)
+
+        category = None
+        detection_confidence = None
+        graphical_metadata = None
+
+        if "custom" in region_element.attrib:
+            custom = json.loads(region_element.attrib["custom"])
+            category = custom.get("category", None)
+            detection_confidence = custom.get("detection_confidence", None)
+            metadata_dict = custom.get("metadata", None)
+            if metadata_dict is not None:
+                graphical_metadata = GraphicalObjectMetadata.from_dict(metadata_dict, page_layout)
+
+        region = cls(region_id,
+                     polygon=polygon,
+                     region_type=region_type,
+                     category=category,
+                     detection_confidence=detection_confidence,
+                     graphical_metadata=graphical_metadata)
+
+        return region
+
 
 class AnnoPagePageLayout(PageLayout):
     def __init__(self, id, page_size):
         super().__init__(id, page_size)
 
-        self.from_altoxml_ended += alto_load_regions
-        self.to_altoxml_processing_added += alto_add_processing_step
-        self.to_altoxml_regions_ended += alto_postprocess_lines
+        self.from_altoxml_ended += altoxml_load_regions
+        self.from_pagexml_ended += pagexml_load_regions
+
+        self.to_altoxml_processing_added += altoxml_add_processing_step
+        self.to_altoxml_regions_ended += altoxml_postprocess_lines
+        self.to_pagexml_processing_added += pagexml_add_processing_step
 
 
-def alto_load_regions(page_layout, root):
+def pagexml_load_regions(page_layout, page_tree):
+    root = page_tree.getroot()
+    for region_element in root.findall(".//ImageRegion", root.nsmap):
+        region = AnnoPageRegionLayout.from_pagexml(region_element, page_layout)
+        if region is not None:
+            page_layout.regions.append(region)
+
+
+def altoxml_load_regions(page_layout, root):
     print_space_element = root.find(".//PrintSpace", root.nsmap)
     if print_space_element is None:
         return
@@ -201,7 +269,7 @@ def add_page_layout_to_alto(page_layout: AnnoPagePageLayout, alto_root: Element,
     page_element = find_or_create_element(layout_element, "Page", namespaces)
     print_space_element = find_or_create_element(page_element, "PrintSpace", namespaces)
 
-    alto_add_processing_step(page_layout, description_element, alto_version)
+    altoxml_add_processing_step(page_layout, description_element, alto_version)
 
     print_space_coords = get_print_space_coords(page_layout, print_space_element)
 
@@ -211,7 +279,7 @@ def add_page_layout_to_alto(page_layout: AnnoPagePageLayout, alto_root: Element,
 
     update_print_space_and_margins(page_layout, page_element, print_space_coords)
 
-    alto_postprocess_lines(page_layout, print_space_element, alto_version)
+    altoxml_postprocess_lines(page_layout, print_space_element, alto_version)
 
     return alto_root
 
@@ -363,7 +431,7 @@ def find_or_create_element(parent_element, tag, namespaces=None):
     return element
 
 
-def alto_postprocess_lines(page_layout, print_space_element, alto_version=ALTOVersion.ALTO_v4_4):
+def altoxml_postprocess_lines(page_layout, print_space_element, alto_version=ALTOVersion.ALTO_v4_4):
     for region in page_layout.regions:
         if not isinstance(region, AnnoPageRegionLayout):
             continue
@@ -403,7 +471,7 @@ def alto_postprocess_lines(page_layout, print_space_element, alto_version=ALTOVe
                         string_element.attrib["SUBS_TYPE"] = "Abbreviation"
 
 
-def alto_add_processing_step(page_layout, description_element: ET.Element, alto_version=ALTOVersion.ALTO_v4_4):
+def altoxml_add_processing_step(page_layout, description_element: ET.Element, alto_version=ALTOVersion.ALTO_v4_4):
     processing_element = create_ocr_processing_element(id=globals.software_name,
                                                        software_creator_str=globals.software_creator,
                                                        software_name_str=globals.software_name,
@@ -411,6 +479,14 @@ def alto_add_processing_step(page_layout, description_element: ET.Element, alto_
                                                        alto_version=alto_version)
 
     description_element.append(processing_element)
+
+
+def pagexml_add_processing_step(page_layout, metadata: ET.Element):
+    metadata_item = ET.SubElement(metadata, "MetadataItem")
+    metadata_item.set("type", "processingStep")
+    metadata_item.set("name", "Non-textual elements detection and analysis")
+    metadata_item.set("value", globals.software_fullname)
+    metadata_item.set("date", DateTimeService.get_datetime_now().isoformat())
 
 
 def render_to_image(image, page_layout):
