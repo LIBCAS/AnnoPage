@@ -180,8 +180,8 @@ class AnnoPageRegionLayout(RegionLayout):
 
 
 class AnnoPagePageLayout(PageLayout):
-    def __init__(self, id, page_size):
-        super().__init__(id, page_size)
+    def __init__(self, id: str|None = None, page_size: tuple[int, int] = (0, 0), file: str|None = None):
+        super().__init__(id, page_size, file)
 
         self.from_altoxml_ended += altoxml_load_regions
         self.from_pagexml_ended += pagexml_load_regions
