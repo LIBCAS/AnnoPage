@@ -48,10 +48,15 @@ class BaseMetadata:
         type_of_resource.text = resource_type
 
     @staticmethod
-    def _add_related_item_element(mods, mods_namespace, item_type, item_id):
+    def _add_related_item_element(mods, mods_namespace, item_type, item_id, item_other_type=None):
         related_item = ET.SubElement(mods, f"{{{mods_namespace}}}relatedItem")
-        related_item.attrib["type"] = item_type
         related_item.attrib["IDREF"] = item_id
+
+        if item_type is not None:
+            related_item.attrib["type"] = item_type
+
+        if item_other_type is not None:
+            related_item.attrib["otherType"] = item_other_type
 
     @staticmethod
     def _add_title_element(mods, mods_namespace, title, language=None):
@@ -78,14 +83,17 @@ class BaseMetadata:
         identifier.attrib["type"] = identifier_type
 
     @staticmethod
-    def _add_record_info_element(mods, mods_namespace, creation_date_time, record_identifier, confidence=None, used_ai_models=None):
+    def _add_record_info_element(mods, mods_namespace, creation_date_time, record_identifier, confidence=None, used_ai_models=None, content_source=None):
         record_info = ET.SubElement(mods, f"{{{mods_namespace}}}recordInfo")
 
         record_creation_date = ET.SubElement(record_info, f"{{{mods_namespace}}}recordCreationDate")
         record_creation_date.text = creation_date_time
 
         record_content_source = ET.SubElement(record_info, f"{{{mods_namespace}}}recordContentSource")
-        record_content_source.text = globals.software_fullname
+        if content_source is not None:
+            record_content_source.text = content_source
+        else:
+            record_content_source.text = globals.software_fullname
 
         description_standard = ET.SubElement(record_info, f"{{{mods_namespace}}}descriptionStandard")
         description_standard.text = "StandardNDK"
