@@ -555,13 +555,6 @@ class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
         if self.prompt_max_tokens is not None:
             payload["max_completion_tokens"] = self.prompt_max_tokens
 
-        response = requests.post(self.api_url, headers=headers, json=payload)
-        if response.status_code != 200:
-            self.logger.warning(f"Request failed with status code {response.status_code}: {response.text}")
-            return None
-
-        response_json = response.json()
-
         result = LLMResult()
         result.usage = {
             "prompt_tokens": 0,
@@ -570,6 +563,13 @@ class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
             "cost": 0,
             "failed_attempts": 0
         }
+
+        response = requests.post(self.api_url, headers=headers, json=payload)
+        if response.status_code != 200:
+            self.logger.warning(f"Request failed with status code {response.status_code}: {response.text}")
+            return result
+
+        response_json = response.json()
 
         usage = response_json["usage"] if "usage" in response_json else None
 
