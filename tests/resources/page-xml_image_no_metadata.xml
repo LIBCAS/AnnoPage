@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8'?>
+<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15/pagecontent.xsd">
+    <Metadata>
+        <Creator>Pero OCR</Creator>
+        <Created>1970-01-01T12:00:00</Created>
+        <LastChange>1970-01-01T12:00:00</LastChange>
+        <MetadataItem type="processingStep" name="Layout and text recognition" value="Pero OCR" date="1970-01-01T12:00:00"/>
+        <MetadataItem type="processingStep" name="Non-textual elements detection and analysis" value="AnnoPage v0.0.1" date="1970-01-01T12:00:00"/>
+    </Metadata>
+    <Page imageFilename="test_page" imageWidth="210" imageHeight="297">
+        <ImageRegion id="image_region" custom="{&quot;category&quot;: &quot;Image&quot;, &quot;detection_confidence&quot;: 0.9, &quot;metadata&quot;: null}">
+            <Coords points="10,20 80,20 80,100 10,100"/>
+        </ImageRegion>
+    </Page>
+</PcGts>
