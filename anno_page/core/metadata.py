@@ -48,10 +48,15 @@ class BaseMetadata:
         type_of_resource.text = resource_type
 
     @staticmethod
-    def _add_related_item_element(mods, mods_namespace, item_type, item_id):
+    def _add_related_item_element(mods, mods_namespace, item_type, item_id, item_other_type=None):
         related_item = ET.SubElement(mods, f"{{{mods_namespace}}}relatedItem")
-        related_item.attrib["type"] = item_type
         related_item.attrib["IDREF"] = item_id
+
+        if item_type is not None:
+            related_item.attrib["type"] = item_type
+
+        if item_other_type is not None:
+            related_item.attrib["otherType"] = item_other_type
 
     @staticmethod
     def _add_title_element(mods, mods_namespace, title, language=None):
