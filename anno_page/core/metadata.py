@@ -100,6 +100,9 @@ class BaseMetadata:
 
         if used_ai_models is not None:
             for model_type, model_name in used_ai_models.items():
+                if not model_type.startswith("model."):
+                    model_type = f"model.{model_type}"
+
                 record_info_note = ET.SubElement(record_info, f"{{{mods_namespace}}}recordInfoNote")
                 record_info_note.attrib["type"] = str(model_type)
                 record_info_note.text = model_name
@@ -1092,7 +1095,8 @@ class GraphicalObjectMetadata(BaseMetadata):
             if text:
                 text = text.strip()
 
-            if model_type is not None and text is not None:
+            if model_type is not None and model_type.startswith("model.") and text is not None:
+                model_type = model_type[len("model."):]
                 used_ai_models[model_type] = text
 
         return used_ai_models if len(used_ai_models) > 0 else None
