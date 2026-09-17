@@ -124,6 +124,9 @@ class AnnoPageRegionLayout(RegionLayout):
         return False
 
     def to_pagexml(self, page_element: ET.SubElement, validate_id: bool = False):
+        if self.graphical_metadata is not None and self.graphical_metadata.confidence is None:
+            self.graphical_metadata.confidence = self.detection_confidence
+
         custom = {
             "category": self.category,
             "detection_confidence": round(self.detection_confidence, 3),
