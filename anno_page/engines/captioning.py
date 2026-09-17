@@ -40,8 +40,6 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
                 if isinstance(region, AnnoPageRegionLayout) and region.graphical_metadata is not None:
                     region.graphical_metadata.title = None
                     region.graphical_metadata.caption_lines_metadata = None
-                    region.graphical_metadata.used_ai_models.pop("caption-detection", None)
-                    region.graphical_metadata.used_ai_models.pop("caption-assignment", None)
 
         yolo_result = self.detector(page_image)
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
@@ -62,12 +60,14 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
                                                           relation=LineRelation.CAPTION,
                                                           description=caption_lines_text,
                                                           title=caption_lines_text,
-                                                          confidence=1.0)
+                                                          confidence=1.0,
+                                                          used_ai_models={
+                                                              "caption-detection": "yolo",
+                                                              "caption-assignment": "nearest"
+                                                          })
 
             linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
-            linked_region.graphical_metadata.used_ai_models["caption-detection"] = "yolo"
-            linked_region.graphical_metadata.used_ai_models["caption-assignment"] = "nearest"
 
         return page_layout
 
@@ -92,8 +92,6 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
                 if isinstance(region, AnnoPageRegionLayout) and region.graphical_metadata is not None:
                     region.graphical_metadata.title = None
                     region.graphical_metadata.caption_lines_metadata = None
-                    region.graphical_metadata.used_ai_models.pop("caption-detection", None)
-                    region.graphical_metadata.used_ai_models.pop("caption-assignment", None)
 
         yolo_result = self.detector(page_image)
 
@@ -125,12 +123,14 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
                                                                       relation=LineRelation.CAPTION,
                                                                       description=caption_lines_text,
                                                                       title=caption_lines_text,
-                                                                      confidence=1.0)
+                                                                      confidence=1.0,
+                                                                      used_ai_models={
+                                                                          "caption-detection": "yolo",
+                                                                          "caption-assignment": "keypoints"
+                                                                      })
 
                         linked_region.graphical_metadata.title = caption_lines_text
                         linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
-                        linked_region.graphical_metadata.used_ai_models["caption-detection"] = "yolo"
-                        linked_region.graphical_metadata.used_ai_models["caption-assignment"] = "keypoints"
 
         return page_layout
 
@@ -156,8 +156,6 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
                 if isinstance(region, AnnoPageRegionLayout) and region.graphical_metadata is not None:
                     region.graphical_metadata.title = None
                     region.graphical_metadata.caption_lines_metadata = None
-                    region.graphical_metadata.used_ai_models.pop("caption-detection", None)
-                    region.graphical_metadata.used_ai_models.pop("caption-assignment", None)
 
         yolo_result = self.detector(page_image)
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
@@ -179,12 +177,14 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
                                                           relation=LineRelation.CAPTION,
                                                           description=caption_lines_text,
                                                           title=caption_lines_text,
-                                                          confidence=1.0)
+                                                          confidence=1.0,
+                                                          used_ai_models={
+                                                              "caption-detection": "yolo",
+                                                              "caption-assignment": "organizer"
+                                                          })
 
             linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
-            linked_region.graphical_metadata.used_ai_models["caption-detection"] = "yolo"
-            linked_region.graphical_metadata.used_ai_models["caption-assignment"] = "organizer"
 
         return page_layout
 
