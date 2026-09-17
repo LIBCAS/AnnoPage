@@ -122,15 +122,31 @@ class BaseMetadata:
         raise NotImplementedError
 
     def to_dict(self) -> dict:
+        creation_date_time = self.creation_date_time
+        if creation_date_time is None:
+            creation_date_time = DateTimeService.get_datetime_now().isoformat(timespec='seconds')
+
         return {
             "tag_id": self.tag_id,
             "mods_id": self.mods_id,
             "mods_uuid": str(self.mods_uuid),
             "record_identifier": str(self.record_identifier),
             "used_ai_models": self.used_ai_models,
-            "creation_date_time": self.creation_date_time,
+            "creation_date_time": creation_date_time,
             "confidence": self.confidence
         }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(
+            tag_id=data.get("tag_id"),
+            mods_id=data.get("mods_id"),
+            mods_uuid=data.get("mods_uuid"),
+            record_identifier=data.get("record_identifier"),
+            used_ai_models=data.get("used_ai_models"),
+            creation_date_time=data.get("creation_date_time"),
+            confidence=data.get("confidence")
+        )
 
 
 class RelatedLinesMetadata(BaseMetadata):
@@ -412,6 +428,35 @@ class RelatedLinesMetadata(BaseMetadata):
 
         return result
 
+    @classmethod
+    def from_dict(cls, data: dict, page_layout=None):
+        lines = []
+        lines_ids = set(data.get("lines", []))
+        for line in page_layout.lines_iterator():
+            if line.id in lines_ids:
+                lines.append(line)
+
+        title = None
+        if "title" in data and data["title"] is not None:
+            if isinstance(data["title"], dict):
+                title = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["title"].items()}
+            else:
+                title = data["title"]
+
+        return cls(
+            tag_id=data.get("tag_id"),
+            mods_id=data.get("mods_id"),
+            lines=lines,
+            relation=LineRelation(data.get("relation")),
+            description=data.get("description"),
+            title=title,
+            mods_uuid=data.get("mods_uuid"),
+            record_identifier=data.get("record_identifier"),
+            creation_date_time=data.get("creation_date_time"),
+            used_ai_models=data.get("used_ai_models"),
+            confidence=data.get("confidence")
+        )
+
     def update(self, other):
         if other is None:
             return
@@ -679,6 +724,10 @@ class GraphicalObjectMetadata(BaseMetadata):
         color = {language_to_string_mapping[k]: v for k, v in self.color.items()} if isinstance(self.color, dict) else self.color
         title = {language_to_string_mapping[k]: v for k, v in self.title.items()} if isinstance(self.title, dict) else self.title
 
+        continuing_line = self.continuing_line.id if self.continuing_line is not None else None
+        caption_lines_metadata = self.caption_lines_metadata.to_dict() if self.caption_lines_metadata is not None else None
+        reference_lines_metadata = self.reference_lines_metadata.to_dict() if self.reference_lines_metadata is not None else None
+
         result.update({
             "description": description,
             "caption": caption,
@@ -686,11 +735,84 @@ class GraphicalObjectMetadata(BaseMetadata):
             "color": color,
             "title": title,
             "tag_description": self.tag_description,
-            "caption_lines_metadata": self.caption_lines_metadata.to_dict() if self.caption_lines_metadata is not None else None,
-            "reference_lines_metadata": self.reference_lines_metadata.to_dict() if self.reference_lines_metadata is not None else None
+            "continuing_line": continuing_line,
+            "caption_lines_metadata": caption_lines_metadata,
+            "reference_lines_metadata": reference_lines_metadata
         })
 
         return result
+
+    @classmethod
+    def from_dict(cls, data: dict, page_layout=None):
+        description = None
+        caption = None
+        topics = None
+        color = None
+        title = None
+        continuing_line = None
+        caption_lines_metadata = None
+        reference_lines_metadata = None
+
+        if "description" in data and data["description"] is not None:
+            if isinstance(data["description"], dict):
+                description = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["description"].items()}
+            else:
+                description = data["description"]
+
+        if "caption" in data and data["caption"] is not None:
+            if isinstance(data["caption"], dict):
+                caption = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["caption"].items()}
+            else:
+                caption = data["caption"]
+
+        if "topics" in data and data["topics"] is not None:
+            if isinstance(data["topics"], dict):
+                topics = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["topics"].items()}
+            else:
+                topics = data["topics"]
+
+        if "color" in data and data["color"] is not None:
+            if isinstance(data["color"], dict):
+                color = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["color"].items()}
+            else:
+                color = data["color"]
+
+        if "title" in data and data["title"] is not None:
+            if isinstance(data["title"], dict):
+                title = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["title"].items()}
+            else:
+                title = data["title"]
+
+        if "continuing_line" in data and data["continuing_line"] is not None and page_layout is not None:
+            for line in page_layout.lines_iterator():
+                if line.id == data["continuing_line"]:
+                    continuing_line = line
+                    break
+
+        if "caption_lines_metadata" in data and data["caption_lines_metadata"] is not None:
+            caption_lines_metadata = RelatedLinesMetadata.from_dict(data["caption_lines_metadata"], page_layout)
+
+        if "reference_lines_metadata" in data and data["reference_lines_metadata"] is not None:
+            reference_lines_metadata = RelatedLinesMetadata.from_dict(data["reference_lines_metadata"], page_layout)
+
+        return cls(
+            tag_id=data.get("tag_id"),
+            mods_id=data.get("mods_id"),
+            mods_uuid=data.get("mods_uuid"),
+            record_identifier=data.get("record_identifier"),
+            creation_date_time=data.get("creation_date_time"),
+            used_ai_models=data.get("used_ai_models"),
+            confidence=data.get("confidence"),
+            description=description,
+            caption=caption,
+            topics=topics,
+            color=color,
+            title=title,
+            tag_description=data.get("tag_description"),
+            continuing_line=continuing_line,
+            caption_lines_metadata=caption_lines_metadata,
+            reference_lines_metadata=reference_lines_metadata
+        )
 
     @classmethod
     def from_altoxml(cls, page_layout, tag_element, tags_element, print_space_element):
