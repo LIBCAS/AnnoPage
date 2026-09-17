@@ -78,14 +78,17 @@ class BaseMetadata:
         identifier.attrib["type"] = identifier_type
 
     @staticmethod
-    def _add_record_info_element(mods, mods_namespace, creation_date_time, record_identifier, confidence=None, used_ai_models=None):
+    def _add_record_info_element(mods, mods_namespace, creation_date_time, record_identifier, confidence=None, used_ai_models=None, content_source=None):
         record_info = ET.SubElement(mods, f"{{{mods_namespace}}}recordInfo")
 
         record_creation_date = ET.SubElement(record_info, f"{{{mods_namespace}}}recordCreationDate")
         record_creation_date.text = creation_date_time
 
         record_content_source = ET.SubElement(record_info, f"{{{mods_namespace}}}recordContentSource")
-        record_content_source.text = globals.software_fullname
+        if content_source is not None:
+            record_content_source.text = content_source
+        else:
+            record_content_source.text = globals.software_fullname
 
         description_standard = ET.SubElement(record_info, f"{{{mods_namespace}}}descriptionStandard")
         description_standard.text = "StandardNDK"
