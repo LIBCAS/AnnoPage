@@ -128,13 +128,36 @@ def load_already_processed_files(directories):
 
 
 def summarize_processing_info(processing_info):
+    errors = summarize_errors(processing_info)
+    llm_usage = summarize_llm_usage(processing_info)
+
+    return {
+        "errors": errors,
+        "llm_usage": llm_usage,
+        "_data": processing_info
+    }
+
+
+def summarize_errors(processing_info):
+    errors_summary = {}
+
+    for page_id, page_info in processing_info.items():
+        page_errors = page_info.get("errors", [])
+        if page_errors:
+            errors_summary[page_id] = page_errors
+
+    return errors_summary
+
+
+def summarize_llm_usage(processing_info):
     total_summary = {}
     per_engine_summary = {}
     per_page_summary = {}
     per_element_summary = {}
 
     for page_id, page_info in processing_info.items():
-        for engine_name, engine_info in page_info.items():
+        page_llm_usage = page_info.get("llm_usage", {})
+        for engine_name, engine_info in page_llm_usage.items():
             for element_id, element_info in engine_info.items():
                 full_element_id = f"{page_id}_{element_id}"
 
@@ -172,13 +195,10 @@ def summarize_processing_info(processing_info):
                     per_element_summary[full_element_id][key] += value
 
     result = {
-        "summary": {
-            "total": total_summary,
-            "per_engine": per_engine_summary,
-            "per_page": per_page_summary,
-            "per_element": per_element_summary
-        },
-        "data": processing_info
+        "total": total_summary,
+        "per_engine": per_engine_summary,
+        "per_page": per_page_summary,
+        "per_element": per_element_summary
     }
 
     return result
@@ -262,7 +282,11 @@ class Computator:
                     self.logger.info(f"Resized image to page size: ({page_width}, {page_height}).")
 
             page_layout.metadata["anno_page_metadata"] = file_metadata
-            page_layout.metadata["anno_page_processing"] = {}
+            page_layout.metadata["anno_page_processing"] = {
+                "llm_usage": {},
+                "errors": []
+            }
+
             page_layout = self.page_parser.process_page(image, page_layout)
 
             self.processing_info[file_id] = page_layout.metadata["anno_page_processing"]
