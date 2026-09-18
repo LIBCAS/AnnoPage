@@ -80,6 +80,9 @@ class AnnoPageRegionLayout(RegionLayout):
         if category is None:
             return None
 
+        if not Category.is_valid_category_string(category):
+            return None
+
         height = composed_block_element.attrib.get("HEIGHT", None)
         width = composed_block_element.attrib.get("WIDTH", None)
         vpos = composed_block_element.attrib.get("VPOS", None)
