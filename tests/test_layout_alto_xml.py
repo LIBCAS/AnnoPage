@@ -1,11 +1,12 @@
 import os
 import numpy as np
+from lxml import etree as ET
 
-from pero_ocr.core.layout import PageLayout, RegionLayout, TextLine, ALTOVersion
+from pero_ocr.core.layout import RegionLayout, TextLine, ALTOVersion
 from pero_ocr.core.services import UuidService as PeroOcrUuidService, DateTimeService as PeroOcrDateTimeService
 
 from anno_page.enums import Language, LineRelation
-from anno_page.core.layout import set_handlers, AnnoPageRegionLayout
+from anno_page.core.layout import AnnoPagePageLayout, AnnoPageRegionLayout, remove_annopage_elements
 from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata
 from anno_page.core.services import UuidService as AnnoPageUuidService, DateTimeService as AnnoPageDateTimeService
 
@@ -29,10 +30,9 @@ def test_alto_image_no_metadata():
     polygon = np.array([[left, top], [right, top], [right, bottom], [left, bottom]])
     region = AnnoPageRegionLayout(id="image_region", polygon=polygon, category="Image", detection_confidence=0.9)
 
-    page_layout = PageLayout(id="test_page", page_size=(297, 210))
+    page_layout = AnnoPagePageLayout(id="test_page", page_size=(297, 210))
     page_layout.regions.append(region)
 
-    set_handlers(page_layout)
     generated_alto = page_layout.to_altoxml_string(version=ALTOVersion.ALTO_v4_4)
 
     resources_dir = os.path.join(os.path.dirname(__file__), "resources")
@@ -72,10 +72,9 @@ def test_alto_image_with_basic_metadata():
         title="Fig. 1: Overview"
     )
 
-    page_layout = PageLayout(id="test_page", page_size=(297, 210))
+    page_layout = AnnoPagePageLayout(id="test_page", page_size=(297, 210))
     page_layout.regions.append(region)
 
-    set_handlers(page_layout)
     generated_alto = page_layout.to_altoxml_string(version=ALTOVersion.ALTO_v4_4)
 
     resources_dir = os.path.join(os.path.dirname(__file__), "resources")
@@ -191,11 +190,10 @@ def test_alto_image_with_basic_metadata_and_text_lines():
     text_region.lines.append(line3)
     text_region.lines.append(line4)
 
-    page_layout = PageLayout(id="test_page", page_size=(297, 210))
+    page_layout = AnnoPagePageLayout(id="test_page", page_size=(297, 210))
     page_layout.regions.append(image_region)
     page_layout.regions.append(text_region)
 
-    set_handlers(page_layout)
     generated_alto = page_layout.to_altoxml_string(version=ALTOVersion.ALTO_v4_4)
 
     resources_dir = os.path.join(os.path.dirname(__file__), "resources")
@@ -283,14 +281,14 @@ def test_alto_image_with_basic_metadata_and_text_lines_tagrefs():
         description=line2.transcription,
         title={
             Language.ENGLISH: line2.transcription
-        }
+        },
+        confidence=0.8
     )
 
-    page_layout = PageLayout(id="test_page", page_size=(297, 210))
+    page_layout = AnnoPagePageLayout(id="test_page", page_size=(297, 210))
     page_layout.regions.append(image_region)
     page_layout.regions.append(text_region)
 
-    set_handlers(page_layout)
     generated_alto = page_layout.to_altoxml_string(version=ALTOVersion.ALTO_v4_4)
 
     resources_dir = os.path.join(os.path.dirname(__file__), "resources")
@@ -381,17 +379,31 @@ def test_alto_image_with_basic_metadata_and_text_lines_tagrefs_ai_models():
         description=line2.transcription,
         title={
             Language.ENGLISH: line2.transcription
-        }
+        },
+        confidence=0.8
     )
 
-    page_layout = PageLayout(id="test_page", page_size=(297, 210))
+    page_layout = AnnoPagePageLayout(id="test_page", page_size=(297, 210))
     page_layout.regions.append(image_region)
     page_layout.regions.append(text_region)
 
-    set_handlers(page_layout)
     generated_alto = page_layout.to_altoxml_string(version=ALTOVersion.ALTO_v4_4)
 
     resources_dir = os.path.join(os.path.dirname(__file__), "resources")
     expected_alto = load_xml(os.path.join(resources_dir, "alto_image_with_basic_metadata_and_text_lines_tagrefs_ai_models.xml"))
 
     assert_xml_equal(generated_alto, expected_alto)
+
+
+def test_alto_remove_annopage_elements():
+    setup()
+
+    resources_dir = os.path.join(os.path.dirname(__file__), "resources")
+    input_alto = load_xml(os.path.join(resources_dir, "alto_remove_annopage_elements_before.xml"))
+    output_alto = load_xml(os.path.join(resources_dir, "alto_remove_annopage_elements_after.xml"))
+
+    alto = ET.fromstring(input_alto.encode())
+    result_alto = remove_annopage_elements(alto)
+    result = ET.tostring(result_alto, encoding='unicode')
+
+    assert_xml_equal(result, output_alto)

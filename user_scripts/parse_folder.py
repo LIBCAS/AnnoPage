@@ -12,11 +12,12 @@ import configparser
 from lxml import etree as ET
 from safe_gpu import safe_gpu
 from multiprocessing import Pool
-from pero_ocr.core.layout import PageLayout, ALTOVersion
+from pero_ocr.core.layout import ALTOVersion
 
-from anno_page.core.layout import render_to_image, add_page_layout_to_alto, set_handlers
+from anno_page.core.layout import render_to_image, add_page_layout_to_alto, remove_annopage_elements, AnnoPagePageLayout
 from anno_page.core.llm_api_aliases import load_llm_api_aliases
 from anno_page.core.page_parser import PageParser
+from anno_page.core.utils import compose_path
 
 
 def parse_arguments():
@@ -128,13 +129,36 @@ def load_already_processed_files(directories):
 
 
 def summarize_processing_info(processing_info):
+    errors = summarize_errors(processing_info)
+    llm_usage = summarize_llm_usage(processing_info)
+
+    return {
+        "errors": errors,
+        "llm_usage": llm_usage,
+        "_data": processing_info
+    }
+
+
+def summarize_errors(processing_info):
+    errors_summary = {}
+
+    for page_id, page_info in processing_info.items():
+        page_errors = page_info.get("errors", [])
+        if page_errors:
+            errors_summary[page_id] = page_errors
+
+    return errors_summary
+
+
+def summarize_llm_usage(processing_info):
     total_summary = {}
     per_engine_summary = {}
     per_page_summary = {}
     per_element_summary = {}
 
     for page_id, page_info in processing_info.items():
-        for engine_name, engine_info in page_info.items():
+        page_llm_usage = page_info.get("llm_usage", {})
+        for engine_name, engine_info in page_llm_usage.items():
             for element_id, element_info in engine_info.items():
                 full_element_id = f"{page_id}_{element_id}"
 
@@ -172,13 +196,10 @@ def summarize_processing_info(processing_info):
                     per_element_summary[full_element_id][key] += value
 
     result = {
-        "summary": {
-            "total": total_summary,
-            "per_engine": per_engine_summary,
-            "per_page": per_page_summary,
-            "per_element": per_element_summary
-        },
-        "data": processing_info
+        "total": total_summary,
+        "per_engine": per_engine_summary,
+        "per_page": per_page_summary,
+        "per_element": per_element_summary
     }
 
     return result
@@ -231,24 +252,21 @@ class Computator:
                 image = None
 
             alto_file_path = None
-            page_layout = PageLayout(id=file_id, page_size=(image.shape[0], image.shape[1]))
+            page_layout = AnnoPagePageLayout(id=file_id, page_size=(image.shape[0], image.shape[1]))
 
             self.logger.info(f"Created empty page layout for id: '{file_id}'.")
 
             if self.input_alto_path is not None:
-                if not self.page_parser.requires_lines:
-                    self.logger.info("Page parser does not require lines, skipping ALTO file loading.")
+                alto_file_path = os.path.join(self.input_alto_path, file_id + '.xml')
+                if os.path.isfile(alto_file_path):
+                    page_layout.from_altoxml(alto_file_path)
+                    self.logger.info(f"Loaded ALTO file: '{alto_file_path}'.")
                 else:
-                    alto_file_path = os.path.join(self.input_alto_path, file_id + '.xml')
-                    if os.path.isfile(alto_file_path):
-                        page_layout.from_altoxml(alto_file_path)
-                        self.logger.info(f"Loaded ALTO file: '{alto_file_path}'.")
-                    else:
-                        self.logger.warning(f"ALTO file does not exist: '{alto_file_path}'.")
+                    self.logger.warning(f"ALTO file does not exist: '{alto_file_path}'.")
             elif self.input_xml_path is not None:
                 xml_file_path = os.path.join(self.input_xml_path, file_id + '.xml')
                 if os.path.isfile(xml_file_path):
-                    page_layout = PageLayout(file=xml_file_path)
+                    page_layout.from_pagexml(xml_file_path)
                     self.logger.info(f"Loaded PAGE XML file: '{xml_file_path}'.")
                 else:
                     self.logger.warning(f"PAGE XML file does not exist: '{xml_file_path}'.")
@@ -265,13 +283,16 @@ class Computator:
                     self.logger.info(f"Resized image to page size: ({page_width}, {page_height}).")
 
             page_layout.metadata["anno_page_metadata"] = file_metadata
-            page_layout.metadata["anno_page_processing"] = {}
+            page_layout.metadata["anno_page_processing"] = {
+                "llm_usage": {},
+                "errors": []
+            }
+
             page_layout = self.page_parser.process_page(image, page_layout)
 
             self.processing_info[file_id] = page_layout.metadata["anno_page_processing"]
 
             if self.output_xml_path is not None:
-                set_handlers(page_layout)
                 page_layout.to_pagexml(os.path.join(self.output_xml_path, file_id + '.xml'))
 
             if self.output_alto_path is not None:
@@ -279,14 +300,15 @@ class Computator:
 
                 if alto_file_path is not None:
                     parser = ET.XMLParser(remove_blank_text=True)
-                    alto = ET.parse(alto_file_path, parser)
-                    add_page_layout_to_alto(page_layout, alto.getroot())
+                    tree = ET.parse(alto_file_path, parser)
+                    alto = tree.getroot()
+                    alto = remove_annopage_elements(alto)
+                    alto = add_page_layout_to_alto(page_layout, alto)
 
                     with open(output_alto_path, 'w', encoding="utf-8") as file:
                         file.write(ET.tostring(alto, pretty_print=True, encoding="utf-8", xml_declaration=True).decode("utf-8"))
 
                 else:
-                    set_handlers(page_layout)
                     page_layout.to_altoxml(output_alto_path, version=ALTOVersion.ALTO_v4_4)
 
             if self.output_embeddings_path is not None:
@@ -399,12 +421,18 @@ def main():
     if args.output_processing_info_path is not None:
         config['PARSE_FOLDER']['OUTPUT_PROCESSING_INFO_PATH'] = args.output_processing_info_path
 
+    if args.llm_api_aliases_path is not None:
+        config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'] = args.llm_api_aliases_path
+
     device = get_device(args.device, args.gpu_id, logger)
 
-    if args.llm_api_aliases_path is not None:
-        load_llm_api_aliases(args.llm_api_aliases_path, reload=True)
+    config_dir = os.path.dirname(config_path)
 
-    page_parser = PageParser(config, config_path=os.path.dirname(config_path), device=device)
+    if config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'] is not None:
+        llm_api_aliases_path = compose_path(config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'], config_dir)
+        load_llm_api_aliases(llm_api_aliases_path, reload=True)
+
+    page_parser = PageParser(config, config_path=config_dir, device=device)
 
     input_image_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_IMAGE_PATH')
     input_xml_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_XML_PATH')

@@ -1,3 +1,4 @@
+import json
 import uuid
 import datetime
 import xmltodict
@@ -34,7 +35,7 @@ def assert_lists_equal(list1, list2):
             raise AssertionError(f"List item {item1} is missing in the second list.")
 
 
-def assert_dicts_equal(dict1, dict2):
+def assert_dicts_equal(dict1, dict2, load_custom_as_json=False):
     all_keys = set(dict1.keys()) | set(dict2.keys())
     for key in all_keys:
         if key not in dict1:
@@ -45,8 +46,19 @@ def assert_dicts_equal(dict1, dict2):
         value1 = dict1[key]
         value2 = dict2[key]
 
+        # If the key is "@custom" and both values are strings that look like JSON, try to parse them as JSON
+        if (load_custom_as_json and key == "@custom" and value1 != value2
+                and isinstance(value1, str) and isinstance(value2, str)
+                and value1.startswith("{") and value2.startswith("{")
+                and value1.endswith("}") and value2.endswith("}")):
+            try:
+                value1 = json.loads(value1)
+                value2 = json.loads(value2)
+            except:
+                pass
+
         if isinstance(value1, dict) and isinstance(value2, dict):
-            assert_dicts_equal(value1, value2)
+            assert_dicts_equal(value1, value2, load_custom_as_json=load_custom_as_json)
 
         elif isinstance(value1, list) and isinstance(value2, list):
             assert_lists_equal(value1, value2)
@@ -55,10 +67,11 @@ def assert_dicts_equal(dict1, dict2):
             raise AssertionError(f"Values for key '{key}' differ: {value1} != {value2}")
 
 
-def assert_xml_equal(actual_xml: str, expected_xml: str) -> None:
+
+def assert_xml_equal(actual_xml: str, expected_xml: str, load_custom_as_json: bool = False) -> None:
     actual_dict = xmltodict.parse(actual_xml)
     expected_dict = xmltodict.parse(expected_xml)
-    assert_dicts_equal(actual_dict, expected_dict)
+    assert_dicts_equal(actual_dict, expected_dict, load_custom_as_json=load_custom_as_json)
 
 
 def load_xml(file_path: str) -> str:

@@ -48,7 +48,7 @@ tool = [
     "torch",
     "transformers",
     "ultralytics",
-    "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@850a540c6a0cd2f24b7f7be85cf2d59fc0583ea8",
+    "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@3567d6d3a22206c88f53afdee3dc8a794fb71d70",
 ]
 
 full = [
@@ -66,7 +66,7 @@ full = [
     "torch",
     "transformers",
     "ultralytics",
-    "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@850a540c6a0cd2f24b7f7be85cf2d59fc0583ea8",
+    "pero-ocr@git+https://github.com/DCGM/pero-ocr.git@3567d6d3a22206c88f53afdee3dc8a794fb71d70",
     "doc-api@git+https://github.com/DCGM/DocAPI@f1e19e4bf9699736ed999bad6b7abf9205d25d42"
 ]
 

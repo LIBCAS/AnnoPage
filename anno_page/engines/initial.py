@@ -10,6 +10,7 @@ from jinja2 import Template
 from pydantic import BaseModel, ValidationError
 from shapely.geometry import Polygon
 
+from anno_page.core.layout import AnnoPageRegionLayout
 from anno_page.core.utils import compose_path, config_get_list
 from anno_page.engines.base import LayoutProcessingEngine
 from anno_page.core.metadata import GraphicalObjectMetadata
@@ -33,6 +34,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
 
         self.categories = config_get_list(self.config, key="categories", fallback=["initial"], make_lowercase=True)
         self.max_attempts = config.getint("max_attempts", fallback=3)
+        self.clear_metadata_before_processing = config.getboolean("clear_metadata_before_processing", fallback=True)
 
         self.top_down_target_coefficient = 0.0
         self.left_right_target_coefficient = 2
@@ -72,33 +74,49 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
 
     def process_page(self, image, page_layout):
         for region in page_layout.regions:
-            if region.category is None or region.category.lower() == "text":
+            if not isinstance(region, AnnoPageRegionLayout):
                 continue
 
             if self.categories is None or region.category.lower() in self.categories:
+                metadata: GraphicalObjectMetadata = region.graphical_metadata
+
+                if metadata is not None and self.clear_metadata_before_processing:
+                    metadata.tag_description = None
+                    metadata.continuing_line = None
+                    metadata.used_ai_models.pop("initial-recognition", None)
+
                 initial_crop, context_crop, continuing_line = self._prepare_prompt_data(image, page_layout, region)
 
                 llm_result = self._process_initial(region, initial_crop, context_crop, continuing_line)
                 result = llm_result.data
 
                 if "anno_page_processing" not in page_layout.metadata:
-                    page_layout.metadata["anno_page_processing"] = {}
+                    page_layout.metadata["anno_page_processing"] = {
+                        "llm_usage": {},
+                        "errors": []
+                    }
 
-                if self.__class__.__name__ not in page_layout.metadata["anno_page_processing"]:
-                    page_layout.metadata["anno_page_processing"][str(self.__class__.__name__)] = {}
+                if self.__class__.__name__ not in page_layout.metadata["anno_page_processing"]["llm_usage"]:
+                    page_layout.metadata["anno_page_processing"]["llm_usage"][str(self.__class__.__name__)] = {}
 
-                page_layout.metadata["anno_page_processing"][str(self.__class__.__name__)][region.id] = llm_result.usage
+                page_layout.metadata["anno_page_processing"]["llm_usage"][str(self.__class__.__name__)][region.id] = llm_result.usage
 
                 if result is not None:
                     region.transcription = result.initial
                     if result.include_space:
                         region.transcription += " "
 
-                    metadata: GraphicalObjectMetadata = region.graphical_metadata
                     if metadata is not None:
                         metadata.tag_description = result.initial
                         metadata.continuing_line = continuing_line
                         metadata.used_ai_models["initial-recognition"] = self.prompt_model
+
+                else:
+                    self.logger.info(f"Failed to process initial recognition for region {region.id}")
+                    page_layout.metadata["anno_page_processing"]["errors"].append({
+                        "engine": self.__class__.__name__,
+                        "message": f"Initial recognition failed for region {region.id}"
+                    })
 
         return page_layout
 
@@ -111,7 +129,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
         prompt_template = Template(prompt_template)
 
         prompt_text = prompt_template.render(example_output=example_output.model_dump_json(indent=4),
-                                             continuing_line=continuing_line.transcription)
+                                             continuing_line=continuing_line.transcription if continuing_line is not None else None)
 
         request_args = {
             "model": self.prompt_model,
@@ -183,7 +201,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
             except JSONDecodeError:
                 self.logger.info(f"Failed to parse JSON for region {region.id}: {response.text}")
             except ValidationError:
-                self.logger.info(f"Initial result for region {region.id} does not conform to expected format: {result_json}")
+                self.logger.info(f"Initial result for region {region.id} does not conform to expected format: {response_json}")
             except Exception as e:
                 self.logger.info(f"Exception for region {region.id}: {e}")
 
