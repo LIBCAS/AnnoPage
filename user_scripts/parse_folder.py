@@ -17,6 +17,7 @@ from pero_ocr.core.layout import ALTOVersion
 from anno_page.core.layout import render_to_image, add_page_layout_to_alto, remove_annopage_elements, AnnoPagePageLayout
 from anno_page.core.llm_api_aliases import load_llm_api_aliases
 from anno_page.core.page_parser import PageParser
+from anno_page.core.utils import compose_path
 
 
 def parse_arguments():
@@ -425,10 +426,13 @@ def main():
 
     device = get_device(args.device, args.gpu_id, logger)
 
-    if config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'] is not None:
-        load_llm_api_aliases(config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'], reload=True)
+    config_dir = os.path.dirname(config_path)
 
-    page_parser = PageParser(config, config_path=os.path.dirname(config_path), device=device)
+    if config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'] is not None:
+        llm_api_aliases_path = compose_path(config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'], config_dir)
+        load_llm_api_aliases(llm_api_aliases_path, reload=True)
+
+    page_parser = PageParser(config, config_path=config_dir, device=device)
 
     input_image_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_IMAGE_PATH')
     input_xml_path = get_value_or_none(config, 'PARSE_FOLDER', 'INPUT_XML_PATH')
