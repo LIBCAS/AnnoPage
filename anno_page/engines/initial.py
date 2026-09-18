@@ -129,7 +129,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
         prompt_template = Template(prompt_template)
 
         prompt_text = prompt_template.render(example_output=example_output.model_dump_json(indent=4),
-                                             continuing_line=continuing_line.transcription)
+                                             continuing_line=continuing_line.transcription if continuing_line is not None else None)
 
         request_args = {
             "model": self.prompt_model,
