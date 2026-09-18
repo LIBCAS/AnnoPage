@@ -109,6 +109,8 @@ class AnnoPageWorker(DocWorkerWrapper):
         outputs_settings = engine_settings.get("outputs", {})
         image_captioning_settings = engine_settings.get("image_captioning", {})
 
+        processing_info_path = os.path.join(result_dir, "processing_info.json")
+
         if image_captioning_settings:
             config_path = self.copy_engine_to_job_dir(engine_dir)
             self.update_image_captioning_config(image_captioning_settings, config_path)
@@ -118,6 +120,7 @@ class AnnoPageWorker(DocWorkerWrapper):
             "annopage",
             "--config", config_path,
             "--input-image-path", images_dir,
+            "--output-processing-info-path", processing_info_path,
             "--logging-level", logging.getLevelName(logger.getEffectiveLevel()),
             "--device", self.device
         ]
