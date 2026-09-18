@@ -91,12 +91,15 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
                 result = llm_result.data
 
                 if "anno_page_processing" not in page_layout.metadata:
-                    page_layout.metadata["anno_page_processing"] = {}
+                    page_layout.metadata["anno_page_processing"] = {
+                        "llm_usage": {},
+                        "errors": []
+                    }
 
-                if self.__class__.__name__ not in page_layout.metadata["anno_page_processing"]:
-                    page_layout.metadata["anno_page_processing"][str(self.__class__.__name__)] = {}
+                if self.__class__.__name__ not in page_layout.metadata["anno_page_processing"]["llm_usage"]:
+                    page_layout.metadata["anno_page_processing"]["llm_usage"][str(self.__class__.__name__)] = {}
 
-                page_layout.metadata["anno_page_processing"][str(self.__class__.__name__)][region.id] = llm_result.usage
+                page_layout.metadata["anno_page_processing"]["llm_usage"][str(self.__class__.__name__)][region.id] = llm_result.usage
 
                 if result is not None:
                     region.transcription = result.initial
@@ -107,6 +110,13 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
                         metadata.tag_description = result.initial
                         metadata.continuing_line = continuing_line
                         metadata.used_ai_models["initial-recognition"] = self.prompt_model
+
+                else:
+                    self.logger.info(f"Failed to process initial recognition for region {region.id}")
+                    page_layout.metadata["anno_page_processing"]["errors"].append({
+                        "engine": self.__class__.__name__,
+                        "message": f"Initial recognition failed for region {region.id}"
+                    })
 
         return page_layout
 
@@ -119,7 +129,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
         prompt_template = Template(prompt_template)
 
         prompt_text = prompt_template.render(example_output=example_output.model_dump_json(indent=4),
-                                             continuing_line=continuing_line.transcription)
+                                             continuing_line=continuing_line.transcription if continuing_line is not None else None)
 
         request_args = {
             "model": self.prompt_model,
@@ -191,7 +201,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
             except JSONDecodeError:
                 self.logger.info(f"Failed to parse JSON for region {region.id}: {response.text}")
             except ValidationError:
-                self.logger.info(f"Initial result for region {region.id} does not conform to expected format: {result_json}")
+                self.logger.info(f"Initial result for region {region.id} does not conform to expected format: {response_json}")
             except Exception as e:
                 self.logger.info(f"Exception for region {region.id}: {e}")
 

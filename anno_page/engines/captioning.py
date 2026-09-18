@@ -377,15 +377,24 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
                         print(item.usage)
                     else:
                         if "anno_page_processing" not in page_layout.metadata:
-                            page_layout.metadata["anno_page_processing"] = {}
+                            page_layout.metadata["anno_page_processing"] = {
+                                "llm_usage": {},
+                                "errors": []
+                            }
 
-                        if self.__class__.__name__ not in page_layout.metadata["anno_page_processing"]:
-                            page_layout.metadata["anno_page_processing"][self.__class__.__name__] = {}
+                        if self.__class__.__name__ not in page_layout.metadata["anno_page_processing"]["llm_usage"]:
+                            page_layout.metadata["anno_page_processing"]["llm_usage"][self.__class__.__name__] = {}
 
-                        page_layout.metadata["anno_page_processing"][self.__class__.__name__][item.region.id] = item.usage
+                        page_layout.metadata["anno_page_processing"]["llm_usage"][self.__class__.__name__][item.region.id] = item.usage
                         self.logger.info(f"Captioning attempt #{current_attempt} succeeded for region {item.region.id}.")
 
                 self.logger.info(f"Captioning attempt #{current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) != 1 else ''} remaining.")
+
+            if len(unfinished_data) > 0:
+                page_layout.metadata["anno_page_processing"]["errors"].append({
+                    "engine": self.__class__.__name__,
+                    "message": f"Captioning failed for {len(unfinished_data)} item{'s' if len(unfinished_data) != 1 else ''} after {self.max_attempts} attempts."
+                })
 
         return page_layout
 
