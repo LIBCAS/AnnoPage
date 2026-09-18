@@ -420,10 +420,13 @@ def main():
     if args.output_processing_info_path is not None:
         config['PARSE_FOLDER']['OUTPUT_PROCESSING_INFO_PATH'] = args.output_processing_info_path
 
+    if args.llm_api_aliases_path is not None:
+        config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'] = args.llm_api_aliases_path
+
     device = get_device(args.device, args.gpu_id, logger)
 
-    if args.llm_api_aliases_path is not None:
-        load_llm_api_aliases(args.llm_api_aliases_path, reload=True)
+    if config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'] is not None:
+        load_llm_api_aliases(config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'], reload=True)
 
     page_parser = PageParser(config, config_path=os.path.dirname(config_path), device=device)
 
