@@ -201,7 +201,7 @@ class InitialRecognitionEngine(LayoutProcessingEngine):
             except JSONDecodeError:
                 self.logger.info(f"Failed to parse JSON for region {region.id}: {response.text}")
             except ValidationError:
-                self.logger.info(f"Initial result for region {region.id} does not conform to expected format: {result_json}")
+                self.logger.info(f"Initial result for region {region.id} does not conform to expected format: {response_json}")
             except Exception as e:
                 self.logger.info(f"Exception for region {region.id}: {e}")
 
