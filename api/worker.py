@@ -69,6 +69,16 @@ def setup_logging(logging_level, logging_format="", logging_date_format=None, lo
         root_handler.setFormatter(console_log_formatter)
 
 
+def read_progress(progress_path):
+    try:
+        with open(progress_path, "r", encoding="utf-8") as progress_file:
+            progress_data = json.load(progress_file)
+            return progress_data
+    except Exception as e:
+        logger.error(f"Error reading progress file {progress_path}: {e}")
+        return None
+
+
 def monitor_progress(stop_event, progress_path, worker):
     while not stop_event.wait(1):
         if os.path.exists(progress_path):
