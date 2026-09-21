@@ -37,6 +37,7 @@ def parse_arguments():
     parser.add_argument("--output-crops-path", help="Path to directory where region crops will be saved.")
     parser.add_argument("--output-image-captioning-prompts-path", help="Path to directory where image captioning prompts will be saved.")
     parser.add_argument("--output-processing-info-path", help="Path to JSON file where processing info will be saved.")
+    parser.add_argument("--output-progress-path", help="Path to JSON file where progress info will be saved.")
     parser.add_argument("--output-embeddings-path", help="Path to directory where embeddings will be saved.")
     parser.add_argument("--embeddings-jsonlines", action='store_true', help="If set, the embedding output is saved in JSON Lines format instead of a single JSON array.")
     parser.add_argument('-s', '--skip-processed', action='store_true', required=False, help='If set, already processed files are skipped.')
@@ -208,6 +209,16 @@ def summarize_llm_usage(processing_info):
 def save_processing_info(processing_info, output_processing_info_path):
     with open(output_processing_info_path, 'w', encoding='utf-8') as file:
         json.dump(processing_info, file, ensure_ascii=False, indent=4)
+
+
+def save_progress(output_progress_path, processed_count, total_count):
+    progress_info = {
+        "processed_count": processed_count,
+        "total_count": total_count
+    }
+
+    with open(output_progress_path, 'w', encoding='utf-8') as file:
+        json.dump(progress_info, file, ensure_ascii=False, indent=4)
 
 
 class Computator:
@@ -514,6 +525,9 @@ def main():
         for index, (file_id, image_file_name) in enumerate(zip(ids_to_process, images_to_process)):
             file_metadata = files_metadata.get(image_file_name, None)
             results.append(computator(image_file_name, file_id, index, len(ids_to_process), file_metadata))
+
+            if args.output_progress_path:
+                save_progress(args.output_progress_path, index + 1, len(ids_to_process))
 
     if output_processing_info_path is not None:
         processing_info = summarize_processing_info(computator.processing_info)
