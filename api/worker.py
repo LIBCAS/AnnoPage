@@ -124,7 +124,7 @@ class AnnoPageWorker(DocWorkerWrapper):
 
         processing_info_path = os.path.join(result_dir, "processing_info.json")
 
-        job_dir = self.get_job_data_path(job.id)
+        job_dir = self.get_job_data_path()
         progress_path = os.path.join(job_dir, "progress.json") if job_dir is not None else None
 
         if image_captioning_settings:
