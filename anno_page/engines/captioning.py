@@ -50,6 +50,10 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
 
         for caption in captions:
             caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
+            if len(caption_lines) == 0:
+                self.logger.info(f"No lines found in caption bounding box {caption}, skipping.")
+                continue
+
             caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
 
             linked_region = find_nearest_region(caption, page_layout, categories=self.categories)
@@ -110,6 +114,10 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
 
         for caption, caption_keypoints, caption_keypoints_confs in zip(captions, captions_keypoints, captions_keypoints_confs):
             caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
+            if len(caption_lines) == 0:
+                self.logger.info(f"No lines found in caption bounding box {caption}, skipping.")
+                continue
+
             caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
 
             for caption_keypoint, caption_keypoint_conf in zip(caption_keypoints, caption_keypoints_confs):
@@ -169,6 +177,10 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
 
         for linked_region, caption in assignment:
             caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
+            if len(caption_lines) == 0:
+                self.logger.info(f"No lines found in caption bounding box {caption}, skipping.")
+                continue
+
             caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
 
             caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.graphical_metadata.tag_id}",
