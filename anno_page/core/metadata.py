@@ -674,9 +674,9 @@ class GraphicalObjectMetadata(BaseMetadata):
         color_mode_form.text = color_info.color_mode
 
         if color_info.dominant_colors is not None:
-            for dominant_color in color_info.dominant_colors:
+            for i, dominant_color in enumerate(color_info.dominant_colors, start=1):
                 dominant_color_physical_description = ET.SubElement(mods, f"{{{mods_namespace}}}physicalDescription")
-                dominant_color_physical_description.attrib["altRepGroup"] = "dominant-color-1"
+                dominant_color_physical_description.attrib["altRepGroup"] = f"dominant-color-{i}"
 
                 if language:
                     dominant_color_physical_description.attrib["lang"] = language
