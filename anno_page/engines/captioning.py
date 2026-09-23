@@ -11,7 +11,6 @@ from json import JSONDecodeError
 from jinja2 import Template
 from pydantic import BaseModel, ValidationError
 from multiprocessing import Pool
-from urllib.parse import urljoin
 
 from anno_page.core.utils import compose_path, config_get_list
 from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata, ColorInfo
@@ -20,11 +19,15 @@ from anno_page.engines import BaseEngine, LayoutProcessingEngine
 from anno_page.engines.detection import YoloDetector
 from anno_page.enums import Language, LineRelation
 from anno_page.engines.helpers import find_nearest_region, find_lines_in_bbox
+from anno_page.core.layout import AnnoPageRegionLayout
 
 
 class CaptionYoloNearestEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
+
+        self.categories = config_get_list(self.config, key="categories", fallback=["Image", "Photograph"], make_lowercase=True)
+        self.clear_metadata_before_processing = config.getboolean("clear_metadata_before_processing", fallback=True)
 
         self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
                                      device=self.device,
@@ -32,6 +35,12 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
                                      image_size=self.config.getint("YOLO_IMAGE_SIZE", 640))
 
     def process_page(self, page_image, page_layout):
+        if self.clear_metadata_before_processing:
+            for region in page_layout.regions:
+                if isinstance(region, AnnoPageRegionLayout) and region.graphical_metadata is not None:
+                    region.graphical_metadata.title = None
+                    region.graphical_metadata.caption_lines_metadata = None
+
         yolo_result = self.detector(page_image)
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
 
@@ -41,25 +50,28 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
 
         for caption in captions:
             caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
+            if len(caption_lines) == 0:
+                self.logger.info(f"No lines found in caption bounding box {caption}, skipping.")
+                continue
+
             caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
 
-            linked_region = find_nearest_region(caption, page_layout, categories=["Image", "Photograph"])
+            linked_region = find_nearest_region(caption, page_layout, categories=self.categories)
 
-            caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.id}",
+            caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.graphical_metadata.tag_id}",
                                                           mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
                                                           lines=caption_lines,
                                                           relation=LineRelation.CAPTION,
                                                           description=caption_lines_text,
-                                                          title=caption_lines_text)
+                                                          title=caption_lines_text,
+                                                          confidence=1.0,
+                                                          used_ai_models={
+                                                              "caption-detection": "yolo",
+                                                              "caption-assignment": "nearest"
+                                                          })
 
             linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
-
-            for caption_line in caption_lines:
-                if caption_line.graphical_metadata is None:
-                    caption_line.graphical_metadata = [caption_lines_metadata]
-                else:
-                    caption_line.graphical_metadata.append(caption_lines_metadata)
 
         return page_layout
 
@@ -67,6 +79,9 @@ class CaptionYoloNearestEngine(LayoutProcessingEngine):
 class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
+
+        self.categories = config_get_list(self.config, key="categories", fallback=["Image", "Photograph"], make_lowercase=True)
+        self.clear_metadata_before_processing = config.getboolean("clear_metadata_before_processing", fallback=True)
 
         self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
                                      device=self.device,
@@ -76,6 +91,12 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
         self.yolo_keypoint_threshold = self.config.getfloat("yolo_keypoint_threshold", fallback=0.5)
 
     def process_page(self, page_image, page_layout):
+        if self.clear_metadata_before_processing:
+            for region in page_layout.regions:
+                if isinstance(region, AnnoPageRegionLayout) and region.graphical_metadata is not None:
+                    region.graphical_metadata.title = None
+                    region.graphical_metadata.caption_lines_metadata = None
+
         yolo_result = self.detector(page_image)
 
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
@@ -93,28 +114,31 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
 
         for caption, caption_keypoints, caption_keypoints_confs in zip(captions, captions_keypoints, captions_keypoints_confs):
             caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
+            if len(caption_lines) == 0:
+                self.logger.info(f"No lines found in caption bounding box {caption}, skipping.")
+                continue
+
             caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
 
             for caption_keypoint, caption_keypoint_conf in zip(caption_keypoints, caption_keypoints_confs):
                 if caption_keypoint_conf >= self.yolo_keypoint_threshold:
                     x, y = caption_keypoint
-                    linked_region = find_nearest_region((x, y, x, y), page_layout, categories=["Image", "Photograph"])
+                    linked_region = find_nearest_region((x, y, x, y), page_layout, categories=self.categories)
                     if linked_region is not None:
-                        caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.id}",
-                                                                    mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
-                                                                    lines=caption_lines,
-                                                                    relation=LineRelation.CAPTION,
-                                                                    description=caption_lines_text,
-                                                                    title=caption_lines_text)
+                        caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.graphical_metadata.tag_id}",
+                                                                      mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
+                                                                      lines=caption_lines,
+                                                                      relation=LineRelation.CAPTION,
+                                                                      description=caption_lines_text,
+                                                                      title=caption_lines_text,
+                                                                      confidence=1.0,
+                                                                      used_ai_models={
+                                                                          "caption-detection": "yolo",
+                                                                          "caption-assignment": "keypoints"
+                                                                      })
 
                         linked_region.graphical_metadata.title = caption_lines_text
                         linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
-
-                        for caption_line in caption_lines:
-                            if caption_line.graphical_metadata is None:
-                                caption_line.graphical_metadata = [caption_lines_metadata]
-                            else:
-                                caption_line.graphical_metadata.append(caption_lines_metadata)
 
         return page_layout
 
@@ -122,6 +146,8 @@ class CaptionYoloKeypointsEngine(LayoutProcessingEngine):
 class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
     def __init__(self, config, device, config_path):
         super().__init__(config, device, config_path, requires_lines=True)
+
+        self.clear_metadata_before_processing = config.getboolean("clear_metadata_before_processing", fallback=True)
 
         self.detector = YoloDetector(model_path=compose_path(self.config["YOLO_PATH"], self.config_path),
                                      device=self.device,
@@ -133,6 +159,12 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
                                                   categories=config_get_list(self.config, key="organizer_categories", fallback=[]))
 
     def process_page(self, page_image, page_layout):
+        if self.clear_metadata_before_processing:
+            for region in page_layout.regions:
+                if isinstance(region, AnnoPageRegionLayout) and region.graphical_metadata is not None:
+                    region.graphical_metadata.title = None
+                    region.graphical_metadata.caption_lines_metadata = None
+
         yolo_result = self.detector(page_image)
         captions = yolo_result.boxes.xyxy.cpu().numpy().astype(np.int32).tolist()
 
@@ -145,23 +177,26 @@ class CaptionYoloOrganizerEngine(LayoutProcessingEngine):
 
         for linked_region, caption in assignment:
             caption_lines = find_lines_in_bbox(caption, page_layout, threshold=0.5)
+            if len(caption_lines) == 0:
+                self.logger.info(f"No lines found in caption bounding box {caption}, skipping.")
+                continue
+
             caption_lines_text = " ".join([line.transcription for line in caption_lines if line.transcription])
 
-            caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.id}",
+            caption_lines_metadata = RelatedLinesMetadata(tag_id=f"fc.{linked_region.graphical_metadata.tag_id}",
                                                           mods_id=f"{linked_region.graphical_metadata.mods_id}_CAPTION_0001",
                                                           lines=caption_lines,
                                                           relation=LineRelation.CAPTION,
                                                           description=caption_lines_text,
-                                                          title=caption_lines_text)
+                                                          title=caption_lines_text,
+                                                          confidence=1.0,
+                                                          used_ai_models={
+                                                              "caption-detection": "yolo",
+                                                              "caption-assignment": "organizer"
+                                                          })
 
             linked_region.graphical_metadata.title = caption_lines_text
             linked_region.graphical_metadata.caption_lines_metadata = caption_lines_metadata
-
-            for caption_line in caption_lines:
-                if caption_line.graphical_metadata is None:
-                    caption_line.graphical_metadata = [caption_lines_metadata]
-                else:
-                    caption_line.graphical_metadata.append(caption_lines_metadata)
 
         return page_layout
 
@@ -228,12 +263,19 @@ class PromptResult(BaseModel):
 
 
 class PromptData:
-    def __init__(self, image=None, region=None, metadata=None, prompt=None, result=None):
+    def __init__(self, image=None, region=None, metadata=None, prompt=None, usage=None, result=None):
         self.image = image
         self.region = region
         self.metadata = metadata
         self.prompt = prompt
+        self.usage = usage
         self.result: PromptResult|None = result
+
+
+class LLMResult:
+    def __init__(self, data: PromptResult|None = None, usage: dict|None = None):
+        self.data = data
+        self.usage = usage
 
 
 class PromptBuilderEngine(BaseEngine):
@@ -269,6 +311,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         self.num_processes = self.config.getint('num_processes', fallback=1)
         self.max_attempts = self.config.getint('max_attempts', fallback=3)
         self.only_prepare_prompts = self.config.getboolean('only_prepare_prompts', fallback=False)
+        self.clear_metadata_before_processing = self.config.getboolean('clear_metadata_before_processing', fallback=True)
 
         with open(self.prompt_settings_path, 'r') as f:
             self.prompt_settings = json.load(f)
@@ -279,7 +322,7 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         self.prompt_builder = PromptBuilderEngine()
 
     @abstractmethod
-    def generate_image_caption(self, prompt_data: PromptData) -> PromptResult|None:
+    def generate_image_caption(self, prompt_data: PromptData) -> LLMResult:
         pass
 
     @staticmethod
@@ -297,8 +340,18 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
         data = []
 
         for region in page_layout.regions:
-            if region.category is None or region.category.lower() == "text":
+            if not isinstance(region, AnnoPageRegionLayout):
                 continue
+
+            if region.graphical_metadata is not None and self.clear_metadata_before_processing:
+                region.graphical_metadata.caption = None
+                region.graphical_metadata.description = None
+                region.graphical_metadata.topics = None
+                region.graphical_metadata.color = None
+                region.graphical_metadata.used_ai_models.pop("image-caption-generation", None)
+                region.graphical_metadata.used_ai_models.pop("image-description-generation", None)
+                region.graphical_metadata.used_ai_models.pop("image-topics-generation", None)
+                region.graphical_metadata.used_ai_models.pop("image-color-generation", None)
 
             if self.categories is None or region.category.lower() in self.categories:
                 image = self.crop_region_image(page_image, region)
@@ -327,8 +380,33 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
 
                 current_attempt += 1
 
-                unfinished_data = [item for item in data if item.result is None]
-                self.logger.info(f"Captioning attempt #{current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) > 1 else ''} remaining.")
+                unfinished_data = []
+                for item in data:
+                    if item.result is None:
+                        item.usage["failed_attempts"] += 1
+                        unfinished_data.append(item)
+                        self.logger.info(f"Captioning attempt #{current_attempt} failed for region {item.region.id}, will retry.")
+                        print(item.usage)
+                    else:
+                        if "anno_page_processing" not in page_layout.metadata:
+                            page_layout.metadata["anno_page_processing"] = {
+                                "llm_usage": {},
+                                "errors": []
+                            }
+
+                        if self.__class__.__name__ not in page_layout.metadata["anno_page_processing"]["llm_usage"]:
+                            page_layout.metadata["anno_page_processing"]["llm_usage"][self.__class__.__name__] = {}
+
+                        page_layout.metadata["anno_page_processing"]["llm_usage"][self.__class__.__name__][item.region.id] = item.usage
+                        self.logger.info(f"Captioning attempt #{current_attempt} succeeded for region {item.region.id}.")
+
+                self.logger.info(f"Captioning attempt #{current_attempt} completed, {len(unfinished_data)} item{'s' if len(unfinished_data) != 1 else ''} remaining.")
+
+            if len(unfinished_data) > 0:
+                page_layout.metadata["anno_page_processing"]["errors"].append({
+                    "engine": self.__class__.__name__,
+                    "message": f"Captioning failed for {len(unfinished_data)} item{'s' if len(unfinished_data) != 1 else ''} after {self.max_attempts} attempts."
+                })
 
         return page_layout
 
@@ -358,27 +436,39 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
                                              element_caption=region.graphical_metadata.title,
                                              metadata=page_metadata if page_metadata else [])
 
+        usage = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": 0,
+            "failed_attempts": 0
+        }
+
         return PromptData(
             image=image,
             region=region,
             metadata=page_metadata,
-            prompt=prompt
+            prompt=prompt,
+            usage=usage
         )
 
     def process_elements(self, data: list[PromptData]):
         if self.num_processes > 1:
             self.logger.debug(f"Processing image captions in parallel using {self.num_processes} processes.")
             with Pool(self.num_processes) as p:
-                image_captions = p.map(self.generate_image_caption, data)
+                captioning_results = p.map(self.generate_image_caption, data)
 
-            for item, image_caption in zip(data, image_captions):
-                item.result = image_caption
+            for item, captioning_result in zip(data, captioning_results):
+                item.result = captioning_result.data
+                for key in item.usage.keys():
+                    item.usage[key] += captioning_result.usage.get(key, 0)
         else:
             self.logger.debug("Processing image captions sequentially.")
             for item in data:
-                image_caption = self.generate_image_caption(item)
-                item.result = image_caption
-
+                captioning_result = self.generate_image_caption(item)
+                item.result = captioning_result.data
+                for key in item.usage.keys():
+                    item.usage[key] += captioning_result.usage.get(key, 0)
 
     def process_image_captions(self, data: list[PromptData]):
         for item in data:
@@ -413,6 +503,11 @@ class BaseImageCaptioningEngine(LayoutProcessingEngine):
             else:
                 metadata.prompts.append(item.prompt)
 
+            metadata.used_ai_models["image-caption-generation"] = self.prompt_model
+            metadata.used_ai_models["image-description-generation"] = self.prompt_model
+            metadata.used_ai_models["image-topics-generation"] = self.prompt_model
+            metadata.used_ai_models["image-color-generation"] = self.prompt_model
+
             self.logger.info(f"Successfully processed caption for region {item.region.id}")
 
     @staticmethod
@@ -441,7 +536,7 @@ class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
 
         self.prompt_max_tokens = self.prompt_settings.get("max_tokens", None)
 
-    def generate_image_caption(self, prompt_data: PromptData) -> PromptResult|None:
+    def generate_image_caption(self, prompt_data: PromptData) -> LLMResult:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
@@ -481,24 +576,43 @@ class OpenAICompletionsImageCaptioningEngine(BaseImageCaptioningEngine):
         if self.prompt_max_tokens is not None:
             payload["max_completion_tokens"] = self.prompt_max_tokens
 
+        result = LLMResult()
+        result.usage = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": 0,
+            "failed_attempts": 0
+        }
+
         response = requests.post(self.api_url, headers=headers, json=payload)
         if response.status_code != 200:
             self.logger.warning(f"Request failed with status code {response.status_code}: {response.text}")
-            return None
+            return result
 
-        result = response.json()["choices"][0]["message"]["content"]
+        response_json = response.json()
+
+        usage = response_json["usage"] if "usage" in response_json else None
+
+        if usage is not None:
+            result.usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
+            result.usage["completion_tokens"] += usage.get("completion_tokens", 0)
+            result.usage["total_tokens"] += usage.get("total_tokens", 0)
+            result.usage["cost"] += usage.get("cost", 0)
 
         image_caption = None
 
         try:
-            result_json = json.loads(result)
-            image_caption = PromptResult.model_validate(result_json)
+            response_content = json.loads(response_json["choices"][0]["message"]["content"])
+            image_caption = PromptResult.model_validate(response_content)
             self.logger.info(f"Successfully parsed caption for region {prompt_data.region.id}")
         except JSONDecodeError:
             self.logger.info(f"Failed to parse JSON for region {prompt_data.region.id}: {response.text}")
         except ValidationError:
-            self.logger.info(f"Caption for region {prompt_data.region.id} does not conform to expected format: {result_json}")
+            self.logger.info(f"Caption for region {prompt_data.region.id} does not conform to expected format: {response_content}")
         except Exception as e:
             self.logger.info(f"Exception for region {prompt_data.region.id}: {e}")
 
-        return image_caption
+        result.data = image_caption
+
+        return result

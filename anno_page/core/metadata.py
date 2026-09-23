@@ -25,11 +25,21 @@ class ColorInfo:
 
 
 class BaseMetadata:
-    def __init__(self, tag_id, mods_id, mods_uuid=None, record_identifier=None):
+    def __init__(self,
+                 tag_id,
+                 mods_id,
+                 mods_uuid=None,
+                 record_identifier=None,
+                 used_ai_models=None,
+                 creation_date_time=None,
+                 confidence=None):
         self.tag_id = tag_id
         self.mods_id = mods_id
         self.mods_uuid = str(UuidService.generate_uuid()) if mods_uuid is None else mods_uuid
         self.record_identifier = str(UuidService.generate_uuid()) if record_identifier is None else record_identifier
+        self.used_ai_models = used_ai_models if used_ai_models is not None else {}
+        self.creation_date_time = creation_date_time
+        self.confidence = confidence
 
     @staticmethod
     def _add_genre_element(mods, mods_namespace, language, content, genre_type=None):
@@ -50,10 +60,15 @@ class BaseMetadata:
         type_of_resource.text = resource_type
 
     @staticmethod
-    def _add_related_item_element(mods, mods_namespace, item_type, item_id):
+    def _add_related_item_element(mods, mods_namespace, item_type, item_id, item_other_type=None):
         related_item = ET.SubElement(mods, f"{{{mods_namespace}}}relatedItem")
-        related_item.attrib["type"] = item_type
         related_item.attrib["IDREF"] = item_id
+
+        if item_type is not None:
+            related_item.attrib["type"] = item_type
+
+        if item_other_type is not None:
+            related_item.attrib["otherType"] = item_other_type
 
     @staticmethod
     def _add_title_element(mods, mods_namespace, title, language=None):
@@ -80,14 +95,17 @@ class BaseMetadata:
         identifier.attrib["type"] = identifier_type
 
     @staticmethod
-    def _add_record_info_element(mods, mods_namespace, creation_date_time, record_identifier, confidence=None):
+    def _add_record_info_element(mods, mods_namespace, creation_date_time, record_identifier, confidence=None, used_ai_models=None, content_source=None):
         record_info = ET.SubElement(mods, f"{{{mods_namespace}}}recordInfo")
 
         record_creation_date = ET.SubElement(record_info, f"{{{mods_namespace}}}recordCreationDate")
         record_creation_date.text = creation_date_time
 
         record_content_source = ET.SubElement(record_info, f"{{{mods_namespace}}}recordContentSource")
-        record_content_source.text = globals.software_fullname
+        if content_source is not None:
+            record_content_source.text = content_source
+        else:
+            record_content_source.text = globals.software_fullname
 
         description_standard = ET.SubElement(record_info, f"{{{mods_namespace}}}descriptionStandard")
         description_standard.text = "StandardNDK"
@@ -99,6 +117,15 @@ class BaseMetadata:
             record_info_note = ET.SubElement(record_info, f"{{{mods_namespace}}}recordInfoNote")
             record_info_note.attrib["type"] = "confidence"
             record_info_note.text = f"{confidence:.3f}"
+
+        if used_ai_models is not None:
+            for model_type, model_name in used_ai_models.items():
+                if not model_type.startswith("model."):
+                    model_type = f"model.{model_type}"
+
+                record_info_note = ET.SubElement(record_info, f"{{{mods_namespace}}}recordInfoNote")
+                record_info_note.attrib["type"] = str(model_type)
+                record_info_note.text = model_name
 
         record_identifier_element = ET.SubElement(record_info, f"{{{mods_namespace}}}recordIdentifier")
         record_identifier_element.attrib["source"] = globals.software_name
@@ -118,11 +145,31 @@ class BaseMetadata:
         raise NotImplementedError
 
     def to_dict(self) -> dict:
+        creation_date_time = self.creation_date_time
+        if creation_date_time is None:
+            creation_date_time = DateTimeService.get_datetime_now().isoformat(timespec='seconds')
+
         return {
             "tag_id": self.tag_id,
             "mods_id": self.mods_id,
-            "mods_uuid": str(self.mods_uuid)
+            "mods_uuid": str(self.mods_uuid),
+            "record_identifier": str(self.record_identifier),
+            "used_ai_models": self.used_ai_models,
+            "creation_date_time": creation_date_time,
+            "confidence": self.confidence
         }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(
+            tag_id=data.get("tag_id"),
+            mods_id=data.get("mods_id"),
+            mods_uuid=data.get("mods_uuid"),
+            record_identifier=data.get("record_identifier"),
+            used_ai_models=data.get("used_ai_models"),
+            creation_date_time=data.get("creation_date_time"),
+            confidence=data.get("confidence")
+        )
 
 
 class RelatedLinesMetadata(BaseMetadata):
@@ -134,14 +181,23 @@ class RelatedLinesMetadata(BaseMetadata):
                  description: Optional[str] = None,
                  title: Optional[str | Dict[Language, str]] = None,
                  mods_uuid=None,
-                 record_identifier=None):
-        super().__init__(tag_id, mods_id, mods_uuid, record_identifier)
+                 record_identifier=None,
+                 creation_date_time=None,
+                 used_ai_models: Optional[Dict[str, str]] = None,
+                 confidence: Optional[float] = None):
+        super().__init__(tag_id=tag_id,
+                         mods_id=mods_id,
+                         mods_uuid=mods_uuid,
+                         record_identifier=record_identifier,
+                         creation_date_time=creation_date_time,
+                         used_ai_models=used_ai_models,
+                         confidence=confidence)
         self.lines = lines
         self.relation = relation
         self.description = description
         self.title = title
 
-    def to_altoxml(self, tags, mods_namespace, confidence, related_mods_id=None, creation_date_time=None):
+    def to_altoxml(self, tags, mods_namespace, related_mods_id=None):
         if self.relation == LineRelation.REFERENCE:
             values = {
                 "tag": "OtherTag",
@@ -192,14 +248,194 @@ class RelatedLinesMetadata(BaseMetadata):
         if related_mods_id is not None:
             self._add_related_item_element(mods, mods_namespace, values["related_item_type"], related_mods_id)
 
-        if creation_date_time is None:
+        if self.creation_date_time is not None:
+            creation_date_time = self.creation_date_time
+        else:
             creation_date_time = DateTimeService.get_datetime_now().isoformat(timespec='seconds')
 
         self._add_record_info_element(mods,
                                       mods_namespace,
                                       creation_date_time=creation_date_time,
                                       record_identifier=self.record_identifier,
-                                      confidence=confidence)
+                                      confidence=self.confidence,
+                                      used_ai_models=self.used_ai_models)
+
+    @classmethod
+    def from_altoxml(cls, page_layout, tag_element, tags_element, print_space_element, relation_type):
+        tag_id = tag_element.attrib["ID"]
+        if tag_id is None:
+            return None
+
+        mods_data = tag_element.find(f".//XmlData/mods:mods", namespaces=tags_element.nsmap)
+        if mods_data is None:
+            return None
+
+        mods_id = mods_data.attrib["ID"]
+        if mods_id is None:
+            return None
+
+        description = tag_element.attrib.get("DESCRIPTION", None)
+
+        lines = cls.find_related_lines(page_layout, tag_id, print_space_element)
+        result = cls(tag_id=tag_id, mods_id=mods_id, description=description, lines=lines, relation=relation_type)
+
+        result = result.from_altoxml_mods(mods_data)
+
+        return result
+
+    @staticmethod
+    def find_related_lines(page_layout, tag_id, print_space_element):
+        lines = []
+        lines_id = set()
+
+        text_line_elements = print_space_element.findall(f".//TextLine", namespaces=print_space_element.nsmap)
+        for text_line_element in text_line_elements:
+            tagrefs = text_line_element.attrib.get("TAGREFS", None)
+            if tagrefs is not None:
+                tagref_list = tagrefs.split()
+                if tag_id in tagref_list:
+                    lines_id.add(text_line_element.attrib["ID"])
+
+        for line in page_layout.lines_iterator():
+            if line.id in lines_id:
+                lines.append(line)
+
+        return lines
+
+    def from_altoxml_mods(self, mods_data):
+        title = self.from_altoxml_mods_title(mods_data)
+        mods_uuid = self.from_altoxml_mods_uuid(mods_data)
+        record_identifier = self.from_altoxml_mods_record_identifier(mods_data)
+        creation_date_time = self.from_altoxml_mods_creation_date_time(mods_data)
+        confidence = self.from_altoxml_mods_confidence(mods_data)
+
+        self.title = title
+        self.mods_uuid = mods_uuid
+        self.record_identifier = record_identifier
+        self.creation_date_time = creation_date_time
+        self.confidence = confidence
+
+        return self
+
+    @staticmethod
+    def from_altoxml_mods_title(mods_data):
+        title_info_elements = mods_data.findall("mods:titleInfo", mods_data.nsmap)
+        if not title_info_elements:
+            return None
+
+        titles = {}
+        for title_info in title_info_elements:
+            title_element = title_info.find("mods:title", mods_data.nsmap)
+            if title_element is not None:
+                lang = title_element.attrib.get("lang", None)
+                text = title_element.text
+
+                if text:
+                    text = text.strip()
+
+                if lang is not None:
+                    lang_enum = language_to_string_mapping_reversed.get(lang, None)
+                    if lang_enum is not None:
+                        titles[lang_enum] = text
+                else:
+                    titles[None] = text
+
+        if len(titles) == 1 and None in titles:
+            return titles[None]
+        elif len(titles) > 0:
+            return titles
+        else:
+            return None
+
+    @staticmethod
+    def from_altoxml_mods_description(mods_data):
+        description_elements = mods_data.findall("mods:abstract[@type='description']", mods_data.nsmap)
+        if not description_elements:
+            return None
+
+        descriptions = {}
+        for desc in description_elements:
+            lang = desc.attrib.get("lang", None)
+            text = desc.text
+
+            if text:
+                text = text.strip()
+
+            if lang is not None:
+                lang_enum = language_to_string_mapping_reversed.get(lang, None)
+                if lang_enum is not None:
+                    descriptions[lang_enum] = text
+            else:
+                descriptions[None] = text
+
+        if len(descriptions) == 1 and None in descriptions:
+            return descriptions[None]
+        elif len(descriptions) > 0:
+            return descriptions
+        else:
+            return None
+
+    @staticmethod
+    def from_altoxml_mods_uuid(mods_data):
+        identifier_element = mods_data.find("mods:identifier[@type='uuid']", mods_data.nsmap)
+        if identifier_element is not None:
+            identifier_text = identifier_element.text
+
+            if identifier_text:
+                identifier_text = identifier_text.strip()
+
+            if identifier_text.startswith("uuid:"):
+                return identifier_text[len("uuid:"):]
+            else:
+                return identifier_text
+        else:
+            return None
+
+    @staticmethod
+    def from_altoxml_mods_record_identifier(mods_data):
+        record_identifier_element = mods_data.find("mods:recordInfo/mods:recordIdentifier", mods_data.nsmap)
+        if record_identifier_element is not None:
+            record_identifier_text = record_identifier_element.text
+
+            if record_identifier_text:
+                record_identifier_text = record_identifier_text.strip()
+
+            if record_identifier_text.startswith("uuid:"):
+                return record_identifier_text[len("uuid:"):]
+            else:
+                return record_identifier_text
+        else:
+            return None
+
+
+    @staticmethod
+    def from_altoxml_mods_creation_date_time(mods_data):
+        record_info_date_elements = mods_data.findall("mods:recordInfo/mods:recordCreationDate", mods_data.nsmap)
+        if not record_info_date_elements:
+            return None
+
+        for date_element in record_info_date_elements:
+            text = date_element.text
+
+            if text:
+                text = text.strip()
+                return text
+
+        return None
+
+    @staticmethod
+    def from_altoxml_mods_confidence(mods_data):
+        record_info_note_elements = mods_data.findall("mods:recordInfo/mods:recordInfoNote[@type='confidence']", mods_data.nsmap)
+
+        confidence = None
+        for note in record_info_note_elements:
+            if note.text:
+                try:
+                    confidence = float(note.text.strip())
+                except ValueError:
+                    continue
+
+        return confidence
 
     def to_dict(self) -> dict:
         result = super().to_dict()
@@ -214,6 +450,35 @@ class RelatedLinesMetadata(BaseMetadata):
         })
 
         return result
+
+    @classmethod
+    def from_dict(cls, data: dict, page_layout=None):
+        lines = []
+        lines_ids = set(data.get("lines", []))
+        for line in page_layout.lines_iterator():
+            if line.id in lines_ids:
+                lines.append(line)
+
+        title = None
+        if "title" in data and data["title"] is not None:
+            if isinstance(data["title"], dict):
+                title = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["title"].items()}
+            else:
+                title = data["title"]
+
+        return cls(
+            tag_id=data.get("tag_id"),
+            mods_id=data.get("mods_id"),
+            lines=lines,
+            relation=LineRelation(data.get("relation")),
+            description=data.get("description"),
+            title=title,
+            mods_uuid=data.get("mods_uuid"),
+            record_identifier=data.get("record_identifier"),
+            creation_date_time=data.get("creation_date_time"),
+            used_ai_models=data.get("used_ai_models"),
+            confidence=data.get("confidence")
+        )
 
     def update(self, other):
         if other is None:
@@ -240,6 +505,8 @@ class GraphicalObjectMetadata(BaseMetadata):
                  mods_id,
                  mods_uuid=None,
                  record_identifier=None,
+                 creation_date_time=None,
+                 tag_description: Optional[str] = None,
                  description: Optional[str| Dict[Language, str]] = None,
                  caption: Optional[str | Dict[Language, str]] = None,
                  topics: Optional[str | Dict[Language, str] | Dict[Language, list[str]]] = None,
@@ -247,13 +514,24 @@ class GraphicalObjectMetadata(BaseMetadata):
                  title: Optional[str | Dict[Language, str]] = None,
                  caption_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  reference_lines_metadata: Optional[RelatedLinesMetadata] = None,
-                 prompts: Optional[List[str]] = None):
-        super().__init__(tag_id, mods_id, mods_uuid, record_identifier)
+                 continuing_line: Optional[TextLine] = None,
+                 prompts: Optional[List[str]] = None,
+                 used_ai_models: Optional[Dict[str, str]] = None,
+                 confidence: Optional[float] = None):
+        super().__init__(tag_id=tag_id,
+                         mods_id=mods_id,
+                         mods_uuid=mods_uuid,
+                         record_identifier=record_identifier,
+                         creation_date_time=creation_date_time,
+                         used_ai_models=used_ai_models,
+                         confidence=confidence)
+        self.tag_description = tag_description
         self.caption = caption
         self.topics = topics
         self.color = color
         self.description = description
         self.title = title
+        self.continuing_line = continuing_line
         self.prompts = prompts
 
         self.caption_lines_metadata = caption_lines_metadata
@@ -290,16 +568,16 @@ class GraphicalObjectMetadata(BaseMetadata):
             else:
                 self.reference_lines_metadata = other.reference_lines_metadata
 
-    def to_altoxml(self, tags, mods_namespace, category, bounding_box, confidence):
-        self.graphics_to_altoxml(tags, mods_namespace, category, bounding_box, confidence)
+    def to_altoxml(self, tags, mods_namespace, category, bounding_box):
+        self.graphics_to_altoxml(tags, mods_namespace, category, bounding_box)
 
         if self.caption_lines_metadata is not None:
-            self.caption_lines_metadata.to_altoxml(tags, mods_namespace, confidence, self.mods_id)
+            self.caption_lines_metadata.to_altoxml(tags, mods_namespace, self.mods_id)
 
         if self.reference_lines_metadata is not None:
-            self.reference_lines_metadata.to_altoxml(tags, mods_namespace, confidence, self.mods_id)
+            self.reference_lines_metadata.to_altoxml(tags, mods_namespace, self.mods_id)
 
-    def graphics_to_altoxml(self, tags, mods_namespace, category, bounding_box, confidence, creation_date_time=None):
+    def graphics_to_altoxml(self, tags, mods_namespace, category, bounding_box):
         layout_tag = ET.SubElement(tags, "LayoutTag")
         xml_data = ET.SubElement(layout_tag, "XmlData")
         mods = ET.SubElement(xml_data, f"{{{mods_namespace}}}mods")
@@ -314,6 +592,9 @@ class GraphicalObjectMetadata(BaseMetadata):
         layout_tag.set("ID", self.tag_id)
         layout_tag.set("TYPE", "Structural")
         layout_tag.set("LABEL", category_en)
+
+        if self.tag_description is not None:
+            layout_tag.set("DESCRIPTION", self.tag_description)
 
         if self.title is not None:
             self._add_title_element(mods, mods_namespace, title=self.title)
@@ -347,14 +628,17 @@ class GraphicalObjectMetadata(BaseMetadata):
         if self.reference_lines_metadata is not None:
             self._add_related_item_element(mods, mods_namespace, "references", self.reference_lines_metadata.mods_id)
 
-        if creation_date_time is None:
+        if self.creation_date_time is not None:
+            creation_date_time = self.creation_date_time
+        else:
             creation_date_time = DateTimeService.get_datetime_now().isoformat(timespec='seconds')
 
         self._add_record_info_element(mods,
                                       mods_namespace,
                                       creation_date_time=creation_date_time,
                                       record_identifier=self.record_identifier,
-                                      confidence=confidence)
+                                      confidence=self.confidence,
+                                      used_ai_models=self.used_ai_models)
 
     @staticmethod
     def _add_size_element(mods, mods_namespace, bounding_box):
@@ -482,14 +766,406 @@ class GraphicalObjectMetadata(BaseMetadata):
         color = {language_to_string_mapping[k]: v for k, v in self.color.items()} if isinstance(self.color, dict) else self.color
         title = {language_to_string_mapping[k]: v for k, v in self.title.items()} if isinstance(self.title, dict) else self.title
 
+        continuing_line = self.continuing_line.id if self.continuing_line is not None else None
+        caption_lines_metadata = self.caption_lines_metadata.to_dict() if self.caption_lines_metadata is not None else None
+        reference_lines_metadata = self.reference_lines_metadata.to_dict() if self.reference_lines_metadata is not None else None
+
         result.update({
             "description": description,
             "caption": caption,
             "topics": topics,
             "color": color,
             "title": title,
-            "caption_lines_metadata": self.caption_lines_metadata.to_dict() if self.caption_lines_metadata is not None else None,
-            "reference_lines_metadata": self.reference_lines_metadata.to_dict() if self.reference_lines_metadata is not None else None
+            "tag_description": self.tag_description,
+            "continuing_line": continuing_line,
+            "caption_lines_metadata": caption_lines_metadata,
+            "reference_lines_metadata": reference_lines_metadata
         })
 
         return result
+
+    @classmethod
+    def from_dict(cls, data: dict, page_layout=None):
+        description = None
+        caption = None
+        topics = None
+        color = None
+        title = None
+        continuing_line = None
+        caption_lines_metadata = None
+        reference_lines_metadata = None
+
+        if "description" in data and data["description"] is not None:
+            if isinstance(data["description"], dict):
+                description = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["description"].items()}
+            else:
+                description = data["description"]
+
+        if "caption" in data and data["caption"] is not None:
+            if isinstance(data["caption"], dict):
+                caption = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["caption"].items()}
+            else:
+                caption = data["caption"]
+
+        if "topics" in data and data["topics"] is not None:
+            if isinstance(data["topics"], dict):
+                topics = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["topics"].items()}
+            else:
+                topics = data["topics"]
+
+        if "color" in data and data["color"] is not None:
+            if isinstance(data["color"], dict):
+                color = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["color"].items()}
+            else:
+                color = data["color"]
+
+        if "title" in data and data["title"] is not None:
+            if isinstance(data["title"], dict):
+                title = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["title"].items()}
+            else:
+                title = data["title"]
+
+        if "continuing_line" in data and data["continuing_line"] is not None and page_layout is not None:
+            for line in page_layout.lines_iterator():
+                if line.id == data["continuing_line"]:
+                    continuing_line = line
+                    break
+
+        if "caption_lines_metadata" in data and data["caption_lines_metadata"] is not None:
+            caption_lines_metadata = RelatedLinesMetadata.from_dict(data["caption_lines_metadata"], page_layout)
+
+        if "reference_lines_metadata" in data and data["reference_lines_metadata"] is not None:
+            reference_lines_metadata = RelatedLinesMetadata.from_dict(data["reference_lines_metadata"], page_layout)
+
+        return cls(
+            tag_id=data.get("tag_id"),
+            mods_id=data.get("mods_id"),
+            mods_uuid=data.get("mods_uuid"),
+            record_identifier=data.get("record_identifier"),
+            creation_date_time=data.get("creation_date_time"),
+            used_ai_models=data.get("used_ai_models"),
+            confidence=data.get("confidence"),
+            description=description,
+            caption=caption,
+            topics=topics,
+            color=color,
+            title=title,
+            tag_description=data.get("tag_description"),
+            continuing_line=continuing_line,
+            caption_lines_metadata=caption_lines_metadata,
+            reference_lines_metadata=reference_lines_metadata
+        )
+
+    @classmethod
+    def from_altoxml(cls, page_layout, tag_element, tags_element, print_space_element):
+        tag_type = tag_element.attrib["TYPE"]
+        if tag_type != "Structural":
+            return None
+
+        tag_id = tag_element.attrib["ID"]
+        if tag_id is None:
+            return None
+
+        tag_description = tag_element.attrib.get("DESCRIPTION", None)
+
+        mods_data = tag_element.find(f".//XmlData/mods:mods", namespaces=tags_element.nsmap)
+        if mods_data is None:
+            return None
+
+        mods_id = mods_data.attrib["ID"]
+        if mods_id is None:
+            return None
+
+        result = cls(tag_id=tag_id, mods_id=mods_id, tag_description=tag_description)
+        result = result.from_altoxml_mods(page_layout, mods_data, tags_element)
+
+        caption_lines_mods_tag_id, reference_lines_mods_tag_id = cls.find_related_lines_mods_tags_id(tags_element, mods_data)
+
+        ns = {
+            "alto": tags_element.nsmap[None],
+            "mods": tags_element.nsmap["mods"],
+        }
+
+        caption_lines_tags = tags_element.xpath("alto:StructureTag[alto:XmlData/mods:mods[@ID=$mods_id]]", namespaces=ns, mods_id=caption_lines_mods_tag_id) if caption_lines_mods_tag_id else None
+        reference_lines_tags = tags_element.xpath("alto:OtherTag[alto:XmlData/mods:mods[@ID=$mods_id]]", namespaces=ns, mods_id=reference_lines_mods_tag_id) if reference_lines_mods_tag_id else None
+
+        caption_lines_tag = caption_lines_tags[0] if caption_lines_tags else None
+        reference_lines_tag = reference_lines_tags[0] if reference_lines_tags else None
+
+        if caption_lines_tag is not None:
+            caption_lines_metadata = RelatedLinesMetadata.from_altoxml(page_layout, caption_lines_tag, tags_element, print_space_element, relation_type=LineRelation.CAPTION)
+            result.caption_lines_metadata = caption_lines_metadata
+
+        if reference_lines_tag is not None:
+            reference_lines_metadata = RelatedLinesMetadata.from_altoxml(page_layout, reference_lines_tag, tags_element, print_space_element, relation_type=LineRelation.REFERENCE)
+            result.reference_lines_metadata = reference_lines_metadata
+
+        return result
+
+    @staticmethod
+    def find_related_lines_mods_tags_id(tags_element, mods_data):
+        caption_lines_mods_tag_id = None
+        reference_lines_mods_tag_id = None
+
+        related_items = mods_data.findall("mods:relatedItem", mods_data.nsmap)
+        for related_item in related_items:
+            item_type = related_item.attrib.get("type", None)
+            if item_type == "constituent":
+                caption_lines_mods_tag_id = related_item.attrib["IDREF"]
+            elif item_type == "references":
+                reference_lines_mods_tag_id = related_item.attrib["IDREF"]
+
+        return caption_lines_mods_tag_id, reference_lines_mods_tag_id
+
+    def from_altoxml_mods(self, page_layout, mods_data, tags_element):
+        description = self.from_altoxml_mods_description(mods_data)
+        caption = self.from_altoxml_mods_caption(mods_data)
+        topics = self.from_altoxml_mods_topics(mods_data)
+        color = self.from_altoxml_mods_color(mods_data)
+        title = self.from_altoxml_mods_title(mods_data)
+        mods_uuid = self.from_altoxml_mods_uuid(mods_data)
+        record_identifier = self.from_altoxml_mods_record_identifier(mods_data)
+        used_ai_models = self.from_altoxml_mods_used_ai_models(mods_data)
+        confidence = self.from_altoxml_mods_confidence(mods_data)
+        creation_date_time = self.from_altoxml_mods_creation_date_time(mods_data)
+
+        self.description = description
+        self.caption = caption
+        self.topics = topics
+        self.color = color
+        self.title = title
+        self.mods_uuid = mods_uuid
+        self.record_identifier = record_identifier
+        self.used_ai_models = used_ai_models
+        self.confidence = confidence
+        self.creation_date_time = creation_date_time
+
+        return self
+
+    @staticmethod
+    def from_altoxml_mods_description(mods_data):
+        description_elements = mods_data.findall("mods:abstract[@type='description']", mods_data.nsmap)
+        if not description_elements:
+            return None
+
+        descriptions = {}
+        for desc in description_elements:
+            lang = desc.attrib.get("lang", None)
+            text = desc.text
+
+            if text:
+                text = text.strip()
+
+            if lang is not None:
+                lang_enum = language_to_string_mapping_reversed.get(lang, None)
+                if lang_enum is not None:
+                    descriptions[lang_enum] = text
+            else:
+                descriptions[None] = text
+
+        if len(descriptions) == 1 and None in descriptions:
+            return descriptions[None]
+        elif len(descriptions) > 0:
+            return descriptions
+        else:
+            return None
+
+    @staticmethod
+    def from_altoxml_mods_caption(mods_data):
+        caption_elements = mods_data.findall("mods:abstract[@type='caption']", mods_data.nsmap)
+        if not caption_elements:
+            return None
+
+        captions = {}
+        for cap in caption_elements:
+            lang = cap.attrib.get("lang", None)
+            text = cap.text
+
+            if text:
+                text = text.strip()
+
+            if lang is not None:
+                lang_enum = language_to_string_mapping_reversed.get(lang, None)
+                if lang_enum is not None:
+                    captions[lang_enum] = text
+            else:
+                captions[None] = text
+
+        if len(captions) == 1 and None in captions:
+            return captions[None]
+        elif len(captions) > 0:
+            return captions
+        else:
+            return None
+
+    @staticmethod
+    def from_altoxml_mods_topics(mods_data):
+        subject_elements = mods_data.findall("mods:subject", mods_data.nsmap)
+        if not subject_elements:
+            return None
+
+        topics = {}
+        for subj in subject_elements:
+            topic_element = subj.find("mods:topic", mods_data.nsmap)
+            if topic_element is not None:
+                lang = topic_element.attrib.get("lang", None)
+                text = topic_element.text
+
+                if text:
+                    text = text.strip()
+
+                if lang is not None:
+                    lang_enum = language_to_string_mapping_reversed.get(lang, None)
+                    if lang_enum is not None:
+                        if lang_enum not in topics:
+                            topics[lang_enum] = []
+                        topics[lang_enum].append(text)
+                else:
+                    if None not in topics:
+                        topics[None] = []
+                    topics[None].append(text)
+
+        for lang in topics:
+            if len(topics[lang]) == 1 and None in topics:
+                topics[lang] = topics[lang][0]
+
+        return topics if len(topics) > 0 else None
+
+    @staticmethod
+    def from_altoxml_mods_color(mods_data):
+        form_elements = mods_data.findall("mods:physicalDescription/mods:form[@type='color']", mods_data.nsmap)
+        if not form_elements:
+            return None
+
+        colors = {}
+        for form in form_elements:
+            lang = form.attrib.get("lang", None)
+            text = form.text
+
+            if text:
+                text = text.strip()
+
+            if lang is not None:
+                lang_enum = language_to_string_mapping_reversed.get(lang, None)
+                if lang_enum is not None:
+                    colors[lang_enum] = text
+            else:
+                colors[None] = text
+
+        if len(colors) == 1 and None in colors:
+            return colors[None]
+        elif len(colors) > 0:
+            return colors
+        else:
+            return None
+
+    @staticmethod
+    def from_altoxml_mods_title(mods_data):
+        title_info_elements = mods_data.findall("mods:titleInfo", mods_data.nsmap)
+        if not title_info_elements:
+            return None
+
+        titles = {}
+        for title_info in title_info_elements:
+            title_element = title_info.find("mods:title", title_info.nsmap)
+            if title_element is not None:
+                lang = title_element.attrib.get("lang", None)
+                text = title_element.text
+
+                if text:
+                    text = text.strip()
+
+                if lang is not None:
+                    lang_enum = language_to_string_mapping_reversed.get(lang, None)
+                    if lang_enum is not None:
+                        titles[lang_enum] = text
+                else:
+                    titles[None] = text
+
+        if len(titles) == 1 and None in titles:
+            return titles[None]
+        elif len(titles) > 0:
+            return titles
+        else:
+            return None
+
+    @staticmethod
+    def from_altoxml_mods_uuid(mods_data):
+        identifier_element = mods_data.find("mods:identifier[@type='uuid']", mods_data.nsmap)
+        if identifier_element is not None:
+            text = identifier_element.text
+
+            if text:
+                text = text.strip()
+
+            if text.startswith("uuid:"):
+                return text[len("uuid:"):]
+            else:
+                return text
+        return None
+
+    @staticmethod
+    def from_altoxml_mods_record_identifier(mods_data):
+        record_identifier_element = mods_data.find("mods:recordInfo/mods:recordIdentifier", mods_data.nsmap)
+        if record_identifier_element is not None:
+            text = record_identifier_element.text
+
+            if text:
+                text = text.strip()
+
+            if text.startswith("uuid:"):
+                return text[len("uuid:"):]
+            else:
+                return text
+        return None
+
+    @staticmethod
+    def from_altoxml_mods_used_ai_models(mods_data):
+        record_info_note_elements = mods_data.findall("mods:recordInfo/mods:recordInfoNote", mods_data.nsmap)
+        record_info_note_elements = [note for note in record_info_note_elements if note.attrib.get("type", None) != "confidence"]
+        if not record_info_note_elements:
+            return None
+
+        used_ai_models = {}
+        for note in record_info_note_elements:
+            model_type = note.attrib.get("type", None)
+            text = note.text
+
+            if text:
+                text = text.strip()
+
+            if model_type is not None and model_type.startswith("model.") and text is not None:
+                model_type = model_type[len("model."):]
+                used_ai_models[model_type] = text
+
+        return used_ai_models if len(used_ai_models) > 0 else None
+
+    @staticmethod
+    def from_altoxml_mods_confidence(mods_data):
+        record_info_note_elements = mods_data.findall("mods:recordInfo/mods:recordInfoNote[@type='confidence']", mods_data.nsmap)
+
+        confidence = None
+        for note in record_info_note_elements:
+            if note.text:
+                try:
+                    confidence = float(note.text.strip())
+                except ValueError:
+                    continue
+
+        return confidence
+
+    @staticmethod
+    def from_altoxml_mods_creation_date_time(mods_data):
+        record_info_date_elements = mods_data.findall("mods:recordInfo/mods:recordCreationDate", mods_data.nsmap)
+        if not record_info_date_elements:
+            return None
+
+        for date_element in record_info_date_elements:
+            text = date_element.text
+
+            if text:
+                text = text.strip()
+                return text
+
+        return None
+

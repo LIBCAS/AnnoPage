@@ -51,6 +51,14 @@ class Category(IntEnum):
 
         return type_of_resource
 
+    @staticmethod
+    def is_valid_category_string(category: str):
+        try:
+            Category.from_string(category)
+            return True
+        except ValueError:
+            return False
+
 
 category_to_string_mapping = {
     Language.ENGLISH: {

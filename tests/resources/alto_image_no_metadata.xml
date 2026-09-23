@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='utf-8'?>
+<alto xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:mods="http://www.loc.gov/mods/v3"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.loc.gov/standards/alto/ns-v4#">
+    <Description>
+        <MeasurementUnit>pixel</MeasurementUnit>
+        <sourceImageInformation>
+            <fileName>test_page</fileName>
+        </sourceImageInformation>
+        <Processing ID="IdOcr">
+            <processingDateTime>1970-01-01T12:00:00</processingDateTime>
+            <processingSoftware>
+                <softwareCreator>Project PERO</softwareCreator>
+                <softwareName>PERO OCR</softwareName>
+                <softwareVersion>v0.1.0</softwareVersion>
+            </processingSoftware>
+        </Processing>
+        <Processing ID="AnnoPage">
+            <processingDateTime>1970-01-01T12:00:00</processingDateTime>
+            <processingSoftware>
+                <softwareCreator>Orbis Pictus</softwareCreator>
+                <softwareName>AnnoPage</softwareName>
+                <softwareVersion>0.0.1</softwareVersion>
+            </processingSoftware>
+        </Processing>
+    </Description>
+    <Tags/>
+    <Layout>
+        <Page ID="id_test_page" PHYSICAL_IMG_NR="1" HEIGHT="297" WIDTH="210">
+            <TopMargin HEIGHT="20" WIDTH="210" VPOS="0" HPOS="0"/>
+            <LeftMargin HEIGHT="297" WIDTH="10" VPOS="0" HPOS="0"/>
+            <RightMargin HEIGHT="297" WIDTH="0" VPOS="0" HPOS="210"/>
+            <BottomMargin HEIGHT="0" WIDTH="210" VPOS="297" HPOS="0"/>
+            <PrintSpace HEIGHT="277" WIDTH="200" VPOS="20" HPOS="10">
+                <ComposedBlock ID="id_test_page_CB0001" TYPE="Image" HEIGHT="80" WIDTH="70" VPOS="20" HPOS="10">
+                    <GraphicalElement ID="id_test_page_GE0001" HEIGHT="80" WIDTH="70" VPOS="20" HPOS="10"/>
+                </ComposedBlock>
+            </PrintSpace>
+        </Page>
+    </Layout>
+</alto>

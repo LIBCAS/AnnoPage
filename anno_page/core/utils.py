@@ -32,6 +32,14 @@ def config_get_list(config, key, fallback=None, make_lowercase=False):
     return value
 
 
+def find_textline(print_space_element, line, namespaces):
+    text_line_element = print_space_element.find(f".//TextLine[@ID='{line.id}']", namespaces)
+    if text_line_element is None:
+        text_line_element = find_textline_by_geometry_and_content(print_space_element, line, namespaces)
+
+    return text_line_element
+
+
 def find_textline_by_geometry_and_content(print_space_element, line, namespaces):
     result = None
 

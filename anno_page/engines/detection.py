@@ -3,7 +3,7 @@ import numpy as np
 from ultralytics import YOLO
 
 from anno_page.core.utils import compose_path, config_get_list
-from anno_page.core.layout import AnnoPageRegionLayout as RegionLayout
+from anno_page.core.layout import AnnoPageRegionLayout
 from anno_page.core.metadata import GraphicalObjectMetadata
 from anno_page.core.services import UuidService
 from anno_page.engines import LayoutProcessingEngine
@@ -17,13 +17,18 @@ class YoloDetectionEngine(LayoutProcessingEngine):
         self.detector = YoloDetector(model_path=compose_path(self.config["MODEL_PATH"], self.config_path),
                                      device=self.device,
                                      detection_threshold=self.config.getfloat("DETECTION_THRESHOLD", 0.2),
-                                     image_size=self.config.getint("IMAGE_SIZE", 640))
+                                     image_size=self.config.getint("IMAGE_SIZE", 640),
+                                     agnostic_nms=self.config.getboolean("AGNOSTIC_NMS", False))
 
         self.categories = config_get_list(self.config, key="categories", fallback=None, make_lowercase=True)
+        self.remove_existing_regions = self.config.getboolean("REMOVE_EXISTING_REGIONS", True)
 
         self.uuid_service = UuidService()
 
     def process_page(self, page_image, page_layout):
+        if self.remove_existing_regions:
+            page_layout.regions = [region for region in page_layout.regions if not isinstance(region, AnnoPageRegionLayout)]
+
         results = self.detector(page_image)
 
         boxes = results.boxes.data.cpu()
@@ -36,12 +41,14 @@ class YoloDetectionEngine(LayoutProcessingEngine):
                 region_id = self.get_next_region_id(page_layout, category, prefix=category_name)
                 polygon = np.array([[x_min, y_min], [x_min, y_max], [x_max, y_max], [x_max, y_min], [x_min, y_min]])
 
-                region = RegionLayout(region_id, polygon, category=category, detection_confidence=conf)
+                region = AnnoPageRegionLayout(region_id, polygon, category=category, detection_confidence=conf)
 
                 mods_id = self.get_next_mods_id(page_layout)
                 region.graphical_metadata = GraphicalObjectMetadata(tag_id=region_id,
                                                                     mods_id=mods_id,
-                                                                    mods_uuid=str(self.uuid_service()))
+                                                                    mods_uuid=str(self.uuid_service()),
+                                                                    used_ai_models={"element-detection": "yolo"},
+                                                                    confidence=conf)
 
                 page_layout.regions.append(region)
 
@@ -49,12 +56,17 @@ class YoloDetectionEngine(LayoutProcessingEngine):
 
     @staticmethod
     def get_next_region_id(page_layout, category, prefix, padding=3):
-        existing_region_ids = set([region.id for region in page_layout.regions if region.category == category])
+        regions = [region for region in page_layout.regions if isinstance(region, AnnoPageRegionLayout)]
+
+        existing_region_ids = set([region.id for region in regions])
+        existing_tag_ids = set([region.graphical_metadata.tag_id for region in regions if region.graphical_metadata and region.graphical_metadata.tag_id])
+
+        existing_ids = existing_region_ids | existing_tag_ids
 
         index = 1
         new_id = f"{prefix}_{str(index).zfill(padding)}"
 
-        while new_id in existing_region_ids:
+        while new_id in existing_ids:
             index += 1
             new_id = f"{prefix}_{str(index).zfill(padding)}"
 
@@ -62,7 +74,8 @@ class YoloDetectionEngine(LayoutProcessingEngine):
     
     @staticmethod
     def get_next_mods_id(page_layout, prefix="MODS_PICT", padding=4):
-        existing_mods_ids = set([region.graphical_metadata.mods_id for region in page_layout.regions if region.graphical_metadata and region.graphical_metadata.mods_id])
+        regions = [region for region in page_layout.regions if isinstance(region, AnnoPageRegionLayout)]
+        existing_mods_ids = set([region.graphical_metadata.mods_id for region in regions if region.graphical_metadata and region.graphical_metadata.mods_id])
 
         index = 1
         new_id = f"{prefix}_{str(index).zfill(padding)}"
@@ -75,16 +88,17 @@ class YoloDetectionEngine(LayoutProcessingEngine):
 
 
 class YoloDetector:
-    def __init__(self, model_path, device, detection_threshold=0.2, image_size=640):
+    def __init__(self, model_path, device, detection_threshold=0.2, image_size=640, agnostic_nms=False):
         self.model = YOLO(model_path).to(device)
         self.detection_threshold = detection_threshold
         self.image_size = image_size
+        self.agnostic_nms = agnostic_nms
 
     def __call__(self, *args, **kwargs):
         return self.detect(*args, **kwargs)
 
     def detect(self, image):
-        results = self.model(image, conf=self.detection_threshold, imgsz=self.image_size, verbose=False)
+        results = self.model(image, conf=self.detection_threshold, imgsz=self.image_size, verbose=False, agnostic_nms=self.agnostic_nms)
         return results[0]
 
     @property

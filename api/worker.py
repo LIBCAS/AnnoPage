@@ -6,6 +6,7 @@ import os
 import sys
 import subprocess
 import shutil
+import threading
 
 from typing import Optional
 from logging.handlers import TimedRotatingFileHandler
@@ -68,6 +69,28 @@ def setup_logging(logging_level, logging_format="", logging_date_format=None, lo
         root_handler.setFormatter(console_log_formatter)
 
 
+def read_progress(progress_path):
+    try:
+        with open(progress_path, "r", encoding="utf-8") as progress_file:
+            progress_data = json.load(progress_file)
+            return progress_data
+    except Exception as e:
+        logger.error(f"Error reading progress file {progress_path}: {e}")
+        return None
+
+
+def monitor_progress(stop_event, progress_path, worker):
+    while not stop_event.wait(1):
+        if os.path.exists(progress_path):
+            progress_data = read_progress(progress_path)
+            if progress_data is not None:
+                processed_count = progress_data.get("processed_count", 0)
+                total_count = progress_data.get("total_count", 0)
+                progress = processed_count / total_count if total_count > 0 else 0
+
+                worker.update_job_progress(progress)
+
+
 class AnnoPageWorker(DocWorkerWrapper):
     def __init__(self,
                  api_url: str,
@@ -109,6 +132,11 @@ class AnnoPageWorker(DocWorkerWrapper):
         outputs_settings = engine_settings.get("outputs", {})
         image_captioning_settings = engine_settings.get("image_captioning", {})
 
+        processing_info_path = os.path.join(result_dir, "processing_info.json")
+
+        job_dir = self.get_job_data_path()
+        progress_path = os.path.join(job_dir, "progress.json") if job_dir is not None else None
+
         if image_captioning_settings:
             config_path = self.copy_engine_to_job_dir(engine_dir)
             self.update_image_captioning_config(image_captioning_settings, config_path)
@@ -118,9 +146,13 @@ class AnnoPageWorker(DocWorkerWrapper):
             "annopage",
             "--config", config_path,
             "--input-image-path", images_dir,
+            "--output-processing-info-path", processing_info_path,
             "--logging-level", logging.getLevelName(logger.getEffectiveLevel()),
             "--device", self.device
         ]
+
+        if progress_path is not None:
+            process_params += ["--output-progress-path", progress_path]
 
         if job.alto_required:
             process_params += ["--input-alto-path", alto_dir]
@@ -157,7 +189,17 @@ class AnnoPageWorker(DocWorkerWrapper):
             text=True
         )
 
-        stdout, stderr = process.communicate()
+        if progress_path is not None:
+            stop_event = threading.Event()
+            progress_thread = threading.Thread(target=monitor_progress, args=(stop_event, progress_path, self), daemon=True)
+            progress_thread.start()
+
+        try:
+            stdout, stderr = process.communicate()
+        finally:
+            if progress_path is not None:
+                stop_event.set()
+                progress_thread.join()
 
         if process.returncode != 0:
             logger.error(f"Job {job.id} processing failed with return code {process.returncode}")

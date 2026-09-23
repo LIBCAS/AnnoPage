@@ -1,0 +1,46 @@
+<?xml version='1.0' encoding='utf-8'?>
+<PcGts xmlns="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schema.primaresearch.org/PAGE/gts/pagecontent/2019-07-15/pagecontent.xsd">
+    <Metadata>
+        <Creator>Pero OCR</Creator>
+        <Created>1970-01-01T12:00:00</Created>
+        <LastChange>1970-01-01T12:00:00</LastChange>
+        <MetadataItem type="processingStep" name="Layout and text recognition" value="Pero OCR" date="1970-01-01T12:00:00"/>
+        <MetadataItem type="processingStep" name="Non-textual elements detection and analysis" value="AnnoPage v0.0.1" date="1970-01-01T12:00:00"/>
+    </Metadata>
+    <Page imageFilename="test_page" imageWidth="210" imageHeight="297">
+        <ImageRegion id="image_region" custom="{&quot;category&quot;: &quot;Image&quot;, &quot;detection_confidence&quot;: 0.9, &quot;metadata&quot;: {&quot;tag_id&quot;: &quot;image_001&quot;, &quot;mods_id&quot;: &quot;MODS_PICT_0001&quot;, &quot;mods_uuid&quot;: &quot;01234567-0123-0123-0123-0123456789ab&quot;, &quot;record_identifier&quot;: &quot;01234567-0123-0123-0123-0123456789ab&quot;, &quot;used_ai_models&quot;: {&quot;element-detection&quot;: &quot;annopage-yolo-1.0&quot;}, &quot;creation_date_time&quot;: &quot;1970-01-01T12:00:00&quot;, &quot;confidence&quot;: 0.9, &quot;description&quot;: {&quot;eng&quot;: &quot;This is a description of an image&quot;, &quot;cze&quot;: &quot;Toto je popis obr\u00e1zku&quot;} , &quot;caption&quot;: {&quot;eng&quot;: &quot;This is a caption of an image&quot;, &quot;cze&quot;: &quot;Toto je titulek obr\u00e1zku&quot;} , &quot;topics&quot;: {&quot;eng&quot;: [&quot;topic1&quot;, &quot;topic2&quot;], &quot;cze&quot;: [&quot;topic1&quot;, &quot;topic2&quot;]} , &quot;color&quot;: {&quot;eng&quot;: &quot;grayscale&quot;, &quot;cze&quot;: &quot;\u010dernob\u00edl\u00fd&quot;} , &quot;title&quot;: &quot;This is line no. 2&quot;, &quot;tag_description&quot;: null, &quot;continuing_line&quot;: null, &quot;caption_lines_metadata&quot;: {&quot;tag_id&quot;: &quot;fc.image_001&quot;, &quot;mods_id&quot;: &quot;MODS_PICT_0001_CAPTION_0001&quot;, &quot;mods_uuid&quot;: &quot;01234567-0123-0123-0123-0123456789ab&quot;, &quot;record_identifier&quot;: &quot;01234567-0123-0123-0123-0123456789ab&quot;, &quot;used_ai_models&quot;: {}, &quot;creation_date_time&quot;: &quot;1970-01-01T12:00:00&quot;, &quot;confidence&quot;: 0.8, &quot;lines&quot;: [&quot;line2&quot;], &quot;relation&quot;: 1, &quot;description&quot;: &quot;This is line no. 2.&quot;, &quot;title&quot;: {&quot;eng&quot;: &quot;This is line no. 2.&quot;}} , &quot;reference_lines_metadata&quot;: null}}">
+            <Coords points="10,20 80,20 80,100 10,100"/>
+        </ImageRegion>
+        <TextRegion id="text_region" custom="{&quot;category&quot;: &quot;text&quot;}">
+            <Coords points="10,120 200,120 200,200 10,200"/>
+            <TextLine id="line1" index="0">
+                <Coords points="10,120 200,120 200,140 10,140"/>
+                <Baseline points="10,135 200,135"/>
+                <TextEquiv>
+                    <Unicode>This is line no. 1.</Unicode>
+                </TextEquiv>
+            </TextLine>
+            <TextLine id="line2" index="1">
+                <Coords points="10,140 200,140 200,160 10,160"/>
+                <Baseline points="10,155 200,155"/>
+                <TextEquiv>
+                    <Unicode>This is line no. 2.</Unicode>
+                </TextEquiv>
+            </TextLine>
+            <TextLine id="line3" index="2">
+                <Coords points="10,160 200,160 200,180 10,180"/>
+                <Baseline points="10,175 200,175"/>
+                <TextEquiv>
+                    <Unicode>This is line no. 3.</Unicode>
+                </TextEquiv>
+            </TextLine>
+            <TextLine id="line4" index="3">
+                <Coords points="10,180 200,180 200,200 10,200"/>
+                <Baseline points="10,195 200,195"/>
+                <TextEquiv>
+                    <Unicode>This is line no. 4.</Unicode>
+                </TextEquiv>
+            </TextLine>
+        </TextRegion>
+    </Page>
+</PcGts>
