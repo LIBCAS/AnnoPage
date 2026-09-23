@@ -12,6 +12,50 @@ from anno_page.core.services import UuidService, DateTimeService
 logger = logging.getLogger(__name__)
 
 
+class DominantColorInfo:
+    def __init__(self, name, coverage):
+        self.name = name
+        self.coverage = coverage
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "coverage": self.coverage
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(
+            name=data.get("name"),
+            coverage=data.get("coverage")
+        )
+
+
+class ColorInfo:
+    def __init__(self, color_mode:str|None=None, dominant_colors:List[DominantColorInfo]|None=None):
+        self.color_mode = color_mode
+        self.dominant_colors = dominant_colors
+
+    def to_dict(self) -> dict:
+        return {
+            "color_mode": self.color_mode,
+            "dominant_colors": [dominant_color.to_dict() for dominant_color in self.dominant_colors] if self.dominant_colors is not None else None
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        dominant_colors_data: list | None = data.get("dominant_colors", None)
+        dominant_colors = None
+
+        if dominant_colors_data is not None:
+            dominant_colors = [DominantColorInfo.from_dict(dc) for dc in dominant_colors_data]
+
+        return cls(
+            color_mode=data.get("color_mode"),
+            dominant_colors=dominant_colors
+        )
+
+
 class BaseMetadata:
     def __init__(self,
                  tag_id,
@@ -498,7 +542,7 @@ class GraphicalObjectMetadata(BaseMetadata):
                  description: Optional[str| Dict[Language, str]] = None,
                  caption: Optional[str | Dict[Language, str]] = None,
                  topics: Optional[str | Dict[Language, str] | Dict[Language, list[str]]] = None,
-                 color: Optional[str | Dict[Language, str]] = None,
+                 color: Optional[ColorInfo | Dict[Language, ColorInfo]] = None,
                  title: Optional[str | Dict[Language, str]] = None,
                  caption_lines_metadata: Optional[RelatedLinesMetadata] = None,
                  reference_lines_metadata: Optional[RelatedLinesMetadata] = None,
@@ -640,8 +684,8 @@ class GraphicalObjectMetadata(BaseMetadata):
         extent.attrib["unit"] = "pixels"
 
     def _add_color_elements(self, mods, mods_namespace):
-        if isinstance(self.color, str):
-            self._add_color_element(mods, mods_namespace, "", self.color)
+        if isinstance(self.color, ColorInfo):
+            self._add_color_element(mods, mods_namespace, None, self.color)
         elif isinstance(self.color, dict):
             for language, color in self.color.items():
                 if color is not None:
@@ -650,13 +694,32 @@ class GraphicalObjectMetadata(BaseMetadata):
             logger.warning(f"Color is not a string or dictionary in GraphicalObjectMetadata '{self.tag_id}'.")
 
     @staticmethod
-    def _add_color_element(mods, mods_namespace, language, color):
-        physical_description = ET.SubElement(mods, f"{{{mods_namespace}}}physicalDescription")
-        physical_description.attrib["altRepGroup"] = "color-1"
-        form = ET.SubElement(physical_description, f"{{{mods_namespace}}}form")
-        form.attrib["type"] = "color"
-        form.attrib["lang"] = language
-        form.text = color
+    def _add_color_element(mods, mods_namespace, language, color_info: ColorInfo):
+        color_mode_physical_description = ET.SubElement(mods, f"{{{mods_namespace}}}physicalDescription")
+        color_mode_physical_description.attrib["altRepGroup"] = "color-1"
+
+        if language:
+            color_mode_physical_description.attrib["lang"] = language
+
+        color_mode_form = ET.SubElement(color_mode_physical_description, f"{{{mods_namespace}}}form")
+        color_mode_form.attrib["type"] = "color"
+        color_mode_form.text = color_info.color_mode
+
+        if color_info.dominant_colors is not None:
+            for i, dominant_color in enumerate(color_info.dominant_colors, start=1):
+                dominant_color_physical_description = ET.SubElement(mods, f"{{{mods_namespace}}}physicalDescription")
+                dominant_color_physical_description.attrib["altRepGroup"] = f"dominant-color-{i}"
+
+                if language:
+                    dominant_color_physical_description.attrib["lang"] = language
+
+                dominant_color_form = ET.SubElement(dominant_color_physical_description, f"{{{mods_namespace}}}form")
+                dominant_color_form.attrib["type"] = "dominant-color"
+                dominant_color_form.text = dominant_color.name
+
+                dominant_color_extent = ET.SubElement(dominant_color_physical_description, f"{{{mods_namespace}}}extent")
+                dominant_color_extent.attrib["unit"] = "percentage"
+                dominant_color_extent.text = f"{dominant_color.coverage:.2f}"
 
     def _add_caption_elements(self, mods, mods_namespace):
         if isinstance(self.caption, str):
@@ -732,12 +795,13 @@ class GraphicalObjectMetadata(BaseMetadata):
         description = {language_to_string_mapping[k]: v for k, v in self.description.items()} if isinstance(self.description, dict) else self.description
         caption = {language_to_string_mapping[k]: v for k, v in self.caption.items()} if isinstance(self.caption, dict) else self.caption
         topics = {language_to_string_mapping[k]: v for k, v in self.topics.items()} if isinstance(self.topics, dict) else self.topics
-        color = {language_to_string_mapping[k]: v for k, v in self.color.items()} if isinstance(self.color, dict) else self.color
         title = {language_to_string_mapping[k]: v for k, v in self.title.items()} if isinstance(self.title, dict) else self.title
 
         continuing_line = self.continuing_line.id if self.continuing_line is not None else None
         caption_lines_metadata = self.caption_lines_metadata.to_dict() if self.caption_lines_metadata is not None else None
         reference_lines_metadata = self.reference_lines_metadata.to_dict() if self.reference_lines_metadata is not None else None
+
+        color = {language_to_string_mapping[k]: v.to_dict() for k, v in self.color.items()} if isinstance(self.color, dict) else self.color
 
         result.update({
             "description": description,
@@ -784,9 +848,9 @@ class GraphicalObjectMetadata(BaseMetadata):
 
         if "color" in data and data["color"] is not None:
             if isinstance(data["color"], dict):
-                color = {language_to_string_mapping_reversed.get(k, None): v for k, v in data["color"].items()}
+                color = {language_to_string_mapping_reversed.get(k, None): ColorInfo.from_dict(v) for k, v in data["color"].items()}
             else:
-                color = data["color"]
+                color = ColorInfo.from_dict(data["color"])
 
         if "title" in data and data["title"] is not None:
             if isinstance(data["title"], dict):
