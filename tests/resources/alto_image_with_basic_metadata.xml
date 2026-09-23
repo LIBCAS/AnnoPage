@@ -40,11 +40,38 @@
                         <mods:title>Fig. 1: Overview</mods:title>
                     </mods:titleInfo>
 
-                    <mods:physicalDescription altRepGroup="color-1">
-                        <mods:form type="color" lang="eng">grayscale</mods:form>
+                    <mods:physicalDescription altRepGroup="color-1" lang="eng">
+                        <mods:form type="color">grayscale</mods:form>
                     </mods:physicalDescription>
-                    <mods:physicalDescription altRepGroup="color-1">
-                        <mods:form type="color" lang="cze">černobílý</mods:form>
+                    <mods:physicalDescription altRepGroup="color-1" lang="cze">
+                        <mods:form type="color">šedotónový</mods:form>
+                    </mods:physicalDescription>
+
+                    <mods:physicalDescription altRepGroup="dominant-color-1" lang="eng">
+                        <mods:form type="dominant-color">gray</mods:form>
+                        <mods:extent unit="percentage">0.70</mods:extent>
+                    </mods:physicalDescription>
+                    <mods:physicalDescription altRepGroup="dominant-color-1" lang="cze">
+                        <mods:form type="dominant-color">šedá</mods:form>
+                        <mods:extent unit="percentage">0.70</mods:extent>
+                    </mods:physicalDescription>
+
+                    <mods:physicalDescription altRepGroup="dominant-color-2" lang="eng">
+                        <mods:form type="dominant-color">white</mods:form>
+                        <mods:extent unit="percentage">0.20</mods:extent>
+                    </mods:physicalDescription>
+                    <mods:physicalDescription altRepGroup="dominant-color-2" lang="cze">
+                        <mods:form type="dominant-color">bílá</mods:form>
+                        <mods:extent unit="percentage">0.20</mods:extent>
+                    </mods:physicalDescription>
+
+                    <mods:physicalDescription altRepGroup="dominant-color-3" lang="eng">
+                        <mods:form type="dominant-color">black</mods:form>
+                        <mods:extent unit="percentage">0.10</mods:extent>
+                    </mods:physicalDescription>
+                    <mods:physicalDescription altRepGroup="dominant-color-3" lang="cze">
+                        <mods:form type="dominant-color">černá</mods:form>
+                        <mods:extent unit="percentage">0.10</mods:extent>
                     </mods:physicalDescription>
 
                     <mods:abstract altRepGroup="description-1" type="description" lang="eng">This is a description of an image</mods:abstract>

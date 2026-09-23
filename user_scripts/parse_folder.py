@@ -439,7 +439,7 @@ def main():
 
     config_dir = os.path.dirname(config_path)
 
-    if config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'] is not None:
+    if 'LLM_API_ALIASES_PATH' in config['PARSE_FOLDER'] and config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'] is not None:
         llm_api_aliases_path = compose_path(config['PARSE_FOLDER']['LLM_API_ALIASES_PATH'], config_dir)
         load_llm_api_aliases(llm_api_aliases_path, reload=True)
 
