@@ -369,7 +369,7 @@ class GraphicalObjectMetadata(BaseMetadata):
 
     def _add_color_elements(self, mods, mods_namespace):
         if isinstance(self.color, ColorInfo):
-            self._add_color_element(mods, mods_namespace, "", self.color)
+            self._add_color_element(mods, mods_namespace, None, self.color)
         elif isinstance(self.color, dict):
             for language, color in self.color.items():
                 if color is not None:
@@ -379,21 +379,31 @@ class GraphicalObjectMetadata(BaseMetadata):
 
     @staticmethod
     def _add_color_element(mods, mods_namespace, language, color_info: ColorInfo):
-        physical_description = ET.SubElement(mods, f"{{{mods_namespace}}}physicalDescription")
-        physical_description.attrib["altRepGroup"] = "color-1"
+        color_mode_physical_description = ET.SubElement(mods, f"{{{mods_namespace}}}physicalDescription")
+        color_mode_physical_description.attrib["altRepGroup"] = "color-1"
 
-        form_color_mode = ET.SubElement(physical_description, f"{{{mods_namespace}}}form")
-        form_color_mode.attrib["type"] = "color"
-        form_color_mode.attrib["lang"] = language
-        form_color_mode.text = color_info.color_mode
+        if language:
+            color_mode_physical_description.attrib["lang"] = language
+
+        color_mode_form = ET.SubElement(color_mode_physical_description, f"{{{mods_namespace}}}form")
+        color_mode_form.attrib["type"] = "color"
+        color_mode_form.text = color_info.color_mode
 
         if color_info.dominant_colors is not None:
             for dominant_color in color_info.dominant_colors:
-                form_dominant_color = ET.SubElement(physical_description, f"{{{mods_namespace}}}form")
-                form_dominant_color.attrib["type"] = "dominant-color"
-                form_dominant_color.attrib["lang"] = language
-                form_dominant_color.attrib["coverage"] = f"{dominant_color.coverage:.2f}"
-                form_dominant_color.text = dominant_color.name
+                dominant_color_physical_description = ET.SubElement(mods, f"{{{mods_namespace}}}physicalDescription")
+                dominant_color_physical_description.attrib["altRepGroup"] = "dominant-color-1"
+
+                if language:
+                    dominant_color_physical_description.attrib["lang"] = language
+
+                dominant_color_form = ET.SubElement(dominant_color_physical_description, f"{{{mods_namespace}}}form")
+                dominant_color_form.attrib["type"] = "dominant-color"
+                dominant_color_form.text = dominant_color.name
+
+                dominant_color_extent = ET.SubElement(dominant_color_physical_description, f"{{{mods_namespace}}}extent")
+                dominant_color_extent.attrib["unit"] = "percentage"
+                dominant_color_extent.text = f"{dominant_color.coverage:.2f}"
 
     def _add_caption_elements(self, mods, mods_namespace):
         if isinstance(self.caption, str):
