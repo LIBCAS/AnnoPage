@@ -7,7 +7,7 @@ from pero_ocr.core.services import UuidService as PeroOcrUuidService, DateTimeSe
 
 from anno_page.enums import Language, LineRelation
 from anno_page.core.layout import AnnoPagePageLayout, AnnoPageRegionLayout, remove_annopage_elements
-from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata
+from anno_page.core.metadata import GraphicalObjectMetadata, RelatedLinesMetadata, ColorInfo, DominantColorInfo
 from anno_page.core.services import UuidService as AnnoPageUuidService, DateTimeService as AnnoPageDateTimeService
 
 from utils import generate_uuid, get_datetime_now, load_xml, assert_xml_equal
@@ -66,8 +66,18 @@ def test_page_xml_image_with_basic_metadata():
             Language.CZECH: ["topic1", "topic2"]
         },
         color={
-            Language.ENGLISH: "grayscale",
-            Language.CZECH: "černobílý"
+            Language.ENGLISH: ColorInfo(
+                color_mode="grayscale",
+                dominant_colors=[DominantColorInfo(name="gray", coverage=0.7),
+                                 DominantColorInfo(name="white", coverage=0.2),
+                                 DominantColorInfo(name="black", coverage=0.1)]
+            ),
+            Language.CZECH: ColorInfo(
+                color_mode="šedotónový",
+                dominant_colors=[DominantColorInfo(name="šedá", coverage=0.7),
+                                 DominantColorInfo(name="bílá", coverage=0.2),
+                                 DominantColorInfo(name="černá", coverage=0.1)]
+            ),
         },
         title="Fig. 1: Overview"
     )
@@ -111,8 +121,18 @@ def test_page_xml_image_with_basic_metadata_and_text_lines_tagrefs_ai_models():
             Language.CZECH: ["topic1", "topic2"]
         },
         color={
-            Language.ENGLISH: "grayscale",
-            Language.CZECH: "černobílý"
+            Language.ENGLISH: ColorInfo(
+                color_mode="grayscale",
+                dominant_colors=[DominantColorInfo(name="gray", coverage=0.7),
+                                 DominantColorInfo(name="white", coverage=0.2),
+                                 DominantColorInfo(name="black", coverage=0.1)]
+            ),
+            Language.CZECH: ColorInfo(
+                color_mode="šedotónový",
+                dominant_colors=[DominantColorInfo(name="šedá", coverage=0.7),
+                                 DominantColorInfo(name="bílá", coverage=0.2),
+                                 DominantColorInfo(name="černá", coverage=0.1)]
+            ),
         },
         title="This is line no. 2",
         used_ai_models={
