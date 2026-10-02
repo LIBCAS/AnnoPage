@@ -1,5 +1,6 @@
 import logging
 from typing import Optional, Dict, List
+
 from lxml import etree as ET
 
 from pero_ocr.core.layout import TextLine
@@ -8,6 +9,7 @@ from anno_page import globals
 from anno_page.enums import Category, Language, LineRelation
 from anno_page.enums.language import language_to_string_mapping, language_to_string_mapping_reversed
 from anno_page.core.services import UuidService, DateTimeService
+from anno_page.core.utils import find_or_create_tags_element
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +231,7 @@ class RelatedLinesMetadata(BaseMetadata):
         self.description = description
         self.title = title
 
-    def to_altoxml(self, tags, mods_namespace, related_mods_id=None):
+    def to_altoxml(self, tags, related_mods_id=None):
         if self.relation == LineRelation.REFERENCE:
             values = {
                 "tag": "OtherTag",
@@ -255,7 +257,10 @@ class RelatedLinesMetadata(BaseMetadata):
 
         tag = ET.SubElement(tags, values["tag"])
         xml_data = ET.SubElement(tag, "XmlData")
-        mods = ET.SubElement(xml_data, f"{{{mods_namespace}}}mods")
+
+        mods_namespace = globals.mods_xml_namespace
+        mods_xmlns = {globals.mods_xml_prefix: mods_namespace}
+        mods = ET.SubElement(xml_data, f"{{{mods_namespace}}}mods", nsmap=mods_xmlns)
 
         tag.set("ID", self.tag_id)
         tag.set("TYPE", values["type"])
@@ -600,19 +605,23 @@ class GraphicalObjectMetadata(BaseMetadata):
             else:
                 self.reference_lines_metadata = other.reference_lines_metadata
 
-    def to_altoxml(self, tags, mods_namespace, category, bounding_box):
-        self.graphics_to_altoxml(tags, mods_namespace, category, bounding_box)
+    def to_altoxml(self, print_space_element, category, bounding_box):
+        tags = find_or_create_tags_element(print_space_element)
+        self.graphics_to_altoxml(tags, category, bounding_box)
 
         if self.caption_lines_metadata is not None:
-            self.caption_lines_metadata.to_altoxml(tags, mods_namespace, self.mods_id)
+            self.caption_lines_metadata.to_altoxml(tags, self.mods_id)
 
         if self.reference_lines_metadata is not None:
-            self.reference_lines_metadata.to_altoxml(tags, mods_namespace, self.mods_id)
+            self.reference_lines_metadata.to_altoxml(tags, self.mods_id)
 
-    def graphics_to_altoxml(self, tags, mods_namespace, category, bounding_box):
+    def graphics_to_altoxml(self, tags, category, bounding_box):
         layout_tag = ET.SubElement(tags, "LayoutTag")
         xml_data = ET.SubElement(layout_tag, "XmlData")
-        mods = ET.SubElement(xml_data, f"{{{mods_namespace}}}mods")
+
+        mods_namespace = globals.mods_xml_namespace
+        mods_xmlns = {globals.mods_xml_prefix: mods_namespace}
+        mods = ET.SubElement(xml_data, f"{{{mods_namespace}}}mods", nsmap=mods_xmlns)
 
         mods.set("ID", self.mods_id)
 
@@ -1201,4 +1210,3 @@ class GraphicalObjectMetadata(BaseMetadata):
                 return text
 
         return None
-
