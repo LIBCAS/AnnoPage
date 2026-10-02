@@ -263,6 +263,8 @@ def set_position_and_size(block, bounding_box):
 
 
 def add_page_layout_to_alto(page_layout: AnnoPagePageLayout, alto_root: Element, alto_version=ALTOVersion.ALTO_v4_4):
+    namespaces = alto_root.nsmap
+
     description_element = find_or_create_element(alto_root, "Description", namespaces)
     tags_element = find_or_create_element(alto_root, "Tags", namespaces)
     layout_element = find_or_create_element(alto_root, "Layout", namespaces)
