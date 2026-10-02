@@ -263,12 +263,6 @@ def set_position_and_size(block, bounding_box):
 
 
 def add_page_layout_to_alto(page_layout: AnnoPagePageLayout, alto_root: Element, alto_version=ALTOVersion.ALTO_v4_4):
-    namespaces = alto_root.nsmap
-    mods_namespace = namespaces.get("mods", None)
-    if mods_namespace is None:
-        mods_namespace = "http://www.loc.gov/mods/v3"
-        namespaces["mods"] = mods_namespace
-
     description_element = find_or_create_element(alto_root, "Description", namespaces)
     tags_element = find_or_create_element(alto_root, "Tags", namespaces)
     layout_element = find_or_create_element(alto_root, "Layout", namespaces)
@@ -281,7 +275,7 @@ def add_page_layout_to_alto(page_layout: AnnoPagePageLayout, alto_root: Element,
 
     for region in page_layout.regions:
         if isinstance(region, AnnoPageRegionLayout):
-            print_space_coords = region.to_altoxml(print_space_element, tags_element, mods_namespace, None, 0.0, print_space_coords, alto_version)
+            print_space_coords = region.to_altoxml(print_space_element, None, 0.0, print_space_coords, alto_version)
 
     update_print_space_and_margins(page_layout, page_element, print_space_coords)
 
