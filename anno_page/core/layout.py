@@ -13,6 +13,7 @@ from anno_page import globals
 from anno_page.core.services import DateTimeService
 from anno_page.enums import Category
 from anno_page.core.metadata import GraphicalObjectMetadata
+from anno_page.core.utils import find_or_create_element
 
 
 class AnnoPageRegionLayout(RegionLayout):
@@ -31,7 +32,7 @@ class AnnoPageRegionLayout(RegionLayout):
 
         self.graphical_metadata: Optional[GraphicalObjectMetadata] = graphical_metadata
 
-    def to_altoxml(self, print_space_element, tags, mods_namespace, arabic_helper, min_line_confidence,
+    def to_altoxml(self, print_space_element, arabic_helper, min_line_confidence,
                    print_space_coords: Tuple[int, int, int, int], version: ALTOVersion, word_splitters=["-"]) -> Tuple[int, int, int, int]:
         category = Category.from_string(self.category)
         page_element = get_page_element(print_space_element)
@@ -65,10 +66,9 @@ class AnnoPageRegionLayout(RegionLayout):
             if self.graphical_metadata.confidence is None:
                 self.graphical_metadata.confidence = self.detection_confidence
 
-            self.graphical_metadata.to_altoxml(tags,
+            self.graphical_metadata.to_altoxml(print_space_element,
                                                category=self.category,
-                                               bounding_box=bounding_box,
-                                               mods_namespace=mods_namespace)
+                                               bounding_box=bounding_box)
 
             composed_block_element.set("TAGREFS", self.graphical_metadata.tag_id)
 
@@ -424,17 +424,6 @@ def update_print_space_and_margins(page_layout, page_element, print_space_coords
     print_space.set("WIDTH", str(int(print_space_width)))
     print_space.set("VPOS", str(int(print_space_vpos)))
     print_space.set("HPOS", str(int(print_space_hpos)))
-
-
-def find_or_create_element(parent_element, tag, namespaces=None):
-    if namespaces is None:
-        namespaces = parent_element.nsmap
-
-    element = parent_element.find(tag, namespaces)
-    if element is None:
-        element = ET.SubElement(parent_element, tag)
-
-    return element
 
 
 def altoxml_postprocess_lines(page_layout, print_space_element, alto_version=ALTOVersion.ALTO_v4_4):

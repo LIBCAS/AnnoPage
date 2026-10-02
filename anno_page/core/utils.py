@@ -69,3 +69,27 @@ def find_textline_by_geometry_and_content(print_space_element, line, namespaces)
             break
 
     return result
+
+
+def find_or_create_element(parent_element, tag, namespaces=None):
+    if namespaces is None:
+        namespaces = parent_element.nsmap
+
+    element = parent_element.find(tag, namespaces)
+    if element is None:
+        element = ET.SubElement(parent_element, tag)
+
+    return element
+
+
+def find_or_create_tags_element(print_space_element):
+    alto_root = find_alto_root(print_space_element)
+    tags_element = find_or_create_element(alto_root, "Tags")
+    return tags_element
+
+
+def find_alto_root(element):
+    while element.getparent() is not None:
+        element = element.getparent()
+
+    return element
