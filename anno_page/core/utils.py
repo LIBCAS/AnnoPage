@@ -3,6 +3,9 @@ import json
 import logging
 import numpy as np
 
+from lxml import etree as ET
+
+
 logger = logging.getLogger(__name__)
 
 
