@@ -87,7 +87,7 @@ def find_or_create_element(parent_element, tag, namespaces=None):
 
 def find_or_create_tags_element(print_space_element):
     alto_root = find_alto_root(print_space_element)
-    tags_element = find_or_create_element(alto_root, "Tags")
+    tags_element = find_or_create_element(alto_root, "Tags", namespaces=alto_root.nsmap)
     return tags_element
 
 
