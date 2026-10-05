@@ -74,9 +74,12 @@ def find_textline_by_geometry_and_content(print_space_element, line, namespaces)
     return result
 
 
-def find_or_create_element(parent_element, tag, namespaces=None):
+def find_or_create_element(parent_element, tag, namespace=None, namespaces=None, update_tag_with_namespace=True):
     if namespaces is None:
         namespaces = parent_element.nsmap
+
+    if namespace in namespaces and update_tag_with_namespace:
+        tag = f"{{{namespaces[namespace]}}}{tag}"
 
     element = parent_element.find(tag, namespaces)
     if element is None:
@@ -87,7 +90,7 @@ def find_or_create_element(parent_element, tag, namespaces=None):
 
 def find_or_create_tags_element(print_space_element):
     alto_root = find_alto_root(print_space_element)
-    tags_element = find_or_create_element(alto_root, "Tags", namespaces=alto_root.nsmap)
+    tags_element = find_or_create_element(alto_root, "Tags")
     return tags_element
 
 
