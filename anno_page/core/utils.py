@@ -3,6 +3,9 @@ import json
 import logging
 import numpy as np
 
+from lxml import etree as ET
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,3 +72,30 @@ def find_textline_by_geometry_and_content(print_space_element, line, namespaces)
             break
 
     return result
+
+
+def find_or_create_element(parent_element, tag, namespace=None, namespaces=None, update_tag_with_namespace=True):
+    if namespaces is None:
+        namespaces = parent_element.nsmap
+
+    if namespace in namespaces and update_tag_with_namespace:
+        tag = f"{{{namespaces[namespace]}}}{tag}"
+
+    element = parent_element.find(tag, namespaces)
+    if element is None:
+        element = ET.SubElement(parent_element, tag)
+
+    return element
+
+
+def find_or_create_tags_element(print_space_element):
+    alto_root = find_alto_root(print_space_element)
+    tags_element = find_or_create_element(alto_root, "Tags")
+    return tags_element
+
+
+def find_alto_root(element):
+    while element.getparent() is not None:
+        element = element.getparent()
+
+    return element
