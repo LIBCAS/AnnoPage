@@ -1114,7 +1114,7 @@ class GraphicalObjectMetadata(BaseMetadata):
 
                 colors[lang].dominant_colors.append(DominantColorInfo(name=color_name, coverage=coverage))
             else:
-                colors[None] = text
+                colors[lang] = ColorInfo(color_mode=None, dominant_colors=[DominantColorInfo(name=color_name, coverage=coverage)])
 
         if len(colors) == 1 and None in colors:
             return colors[None]
