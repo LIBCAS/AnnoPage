@@ -303,7 +303,11 @@ class RelatedLinesMetadata(BaseMetadata):
         if tag_id is None:
             return None
 
-        mods_data = tag_element.find(f".//XmlData/mods:mods", namespaces=tags_element.nsmap)
+        namespaces = tags_element.nsmap
+        if globals.mods_xml_prefix not in namespaces:
+            namespaces[globals.mods_xml_prefix] = globals.mods_xml_namespace
+
+        mods_data = tag_element.find(f".//XmlData/mods:mods", namespaces=namespaces)
         if mods_data is None:
             return None
 
@@ -910,7 +914,11 @@ class GraphicalObjectMetadata(BaseMetadata):
 
         tag_description = tag_element.attrib.get("DESCRIPTION", None)
 
-        mods_data = tag_element.find(f".//XmlData/mods:mods", namespaces=tags_element.nsmap)
+        namespaces = tags_element.nsmap
+        if globals.mods_xml_prefix not in namespaces:
+            namespaces[globals.mods_xml_prefix] = globals.mods_xml_namespace
+
+        mods_data = tag_element.find(f".//XmlData/mods:mods", namespaces=namespaces)
         if mods_data is None:
             return None
 
@@ -924,8 +932,8 @@ class GraphicalObjectMetadata(BaseMetadata):
         caption_lines_mods_tag_id, reference_lines_mods_tag_id = cls.find_related_lines_mods_tags_id(tags_element, mods_data)
 
         ns = {
-            "alto": tags_element.nsmap[None],
-            "mods": tags_element.nsmap["mods"],
+            "alto": namespaces[None],
+            "mods": namespaces["mods"],
         }
 
         caption_lines_tags = tags_element.xpath("alto:StructureTag[alto:XmlData/mods:mods[@ID=$mods_id]]", namespaces=ns, mods_id=caption_lines_mods_tag_id) if caption_lines_mods_tag_id else None
