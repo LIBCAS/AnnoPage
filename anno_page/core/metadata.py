@@ -1076,21 +1076,43 @@ class GraphicalObjectMetadata(BaseMetadata):
     @staticmethod
     def from_altoxml_mods_color(mods_data):
         form_elements = mods_data.findall("mods:physicalDescription/mods:form[@type='color']", mods_data.nsmap)
-        if not form_elements:
-            return None
 
         colors = {}
         for form in form_elements:
-            lang = form.attrib.get("lang", None)
+            lang = form.getparent().attrib.get("lang", None)
             text = form.text
 
             if text:
                 text = text.strip()
 
             if lang is not None:
-                lang_enum = language_to_string_mapping_reversed.get(lang, None)
-                if lang_enum is not None:
-                    colors[lang_enum] = text
+                lang = language_to_string_mapping_reversed.get(lang, None)
+
+            colors[lang] = ColorInfo(color_mode=text)
+
+        dominant_color_elements = mods_data.findall("mods:physicalDescription/mods:form[@type='dominant-color']", mods_data.nsmap)
+        for dominant_color_element in dominant_color_elements:
+            lang = dominant_color_element.getparent().attrib.get("lang", None)
+            color_name = dominant_color_element.text.strip() if dominant_color_element.text else None
+
+            if lang is not None:
+                lang = language_to_string_mapping_reversed.get(lang, None)
+
+            extent_element = dominant_color_element.getparent().find("mods:extent[@unit='percentage']", mods_data.nsmap)
+            coverage = None
+            if extent_element is not None:
+                coverage_text = extent_element.text
+                if coverage_text:
+                    try:
+                        coverage = float(coverage_text.strip())
+                    except:
+                        pass
+
+            if lang in colors:
+                if colors[lang].dominant_colors is None:
+                    colors[lang].dominant_colors = []
+
+                colors[lang].dominant_colors.append(DominantColorInfo(name=color_name, coverage=coverage))
             else:
                 colors[None] = text
 
