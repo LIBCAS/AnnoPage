@@ -170,6 +170,9 @@ class AnnoPageRegionLayout(RegionLayout):
         if "custom" in region_element.attrib:
             custom = json.loads(region_element.attrib["custom"])
             category = custom.get("category", None)
+            if not Category.is_valid_category_string(category):
+                return None
+
             detection_confidence = custom.get("detection_confidence", None)
             metadata_dict = custom.get("metadata", None)
             if metadata_dict is not None:
