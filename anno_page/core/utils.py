@@ -89,12 +89,12 @@ def find_or_create_element(parent_element, tag, namespace=None, namespaces=None,
 
 
 def find_or_create_tags_element(print_space_element):
-    alto_root = find_alto_root(print_space_element)
+    alto_root = get_root_element(print_space_element)
     tags_element = find_or_create_element(alto_root, "Tags")
     return tags_element
 
 
-def find_alto_root(element):
+def get_root_element(element):
     while element.getparent() is not None:
         element = element.getparent()
 

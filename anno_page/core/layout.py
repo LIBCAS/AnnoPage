@@ -170,6 +170,9 @@ class AnnoPageRegionLayout(RegionLayout):
         if "custom" in region_element.attrib:
             custom = json.loads(region_element.attrib["custom"])
             category = custom.get("category", None)
+            if not Category.is_valid_category_string(category):
+                return None
+
             detection_confidence = custom.get("detection_confidence", None)
             metadata_dict = custom.get("metadata", None)
             if metadata_dict is not None:
@@ -187,7 +190,7 @@ class AnnoPageRegionLayout(RegionLayout):
 
 class AnnoPagePageLayout(PageLayout):
     def __init__(self, id: str|None = None, page_size: tuple[int, int] = (0, 0), file: str|None = None):
-        super().__init__(id, page_size, file)
+        super().__init__(id, page_size, file=None)
 
         self.from_altoxml_ended += altoxml_load_regions
         self.from_pagexml_ended += pagexml_load_regions
@@ -195,6 +198,12 @@ class AnnoPagePageLayout(PageLayout):
         self.to_altoxml_processing_added += altoxml_add_processing_step
         self.to_altoxml_regions_ended += altoxml_postprocess_lines
         self.to_pagexml_processing_added += pagexml_add_processing_step
+
+        if file is not None:
+            self.from_pagexml(file)
+
+        if self.reading_order is not None and len(self.regions) > 0:
+            self.sort_regions_by_reading_order()
 
 
 def pagexml_load_regions(page_layout, page_tree):

@@ -303,7 +303,11 @@ class RelatedLinesMetadata(BaseMetadata):
         if tag_id is None:
             return None
 
-        mods_data = tag_element.find(f".//XmlData/mods:mods", namespaces=tags_element.nsmap)
+        namespaces = tags_element.nsmap
+        if globals.mods_xml_prefix not in namespaces:
+            namespaces[globals.mods_xml_prefix] = globals.mods_xml_namespace
+
+        mods_data = tag_element.find(f".//XmlData/mods:mods", namespaces=namespaces)
         if mods_data is None:
             return None
 
@@ -910,7 +914,11 @@ class GraphicalObjectMetadata(BaseMetadata):
 
         tag_description = tag_element.attrib.get("DESCRIPTION", None)
 
-        mods_data = tag_element.find(f".//XmlData/mods:mods", namespaces=tags_element.nsmap)
+        namespaces = tags_element.nsmap
+        if globals.mods_xml_prefix not in namespaces:
+            namespaces[globals.mods_xml_prefix] = globals.mods_xml_namespace
+
+        mods_data = tag_element.find(f".//XmlData/mods:mods", namespaces=namespaces)
         if mods_data is None:
             return None
 
@@ -924,8 +932,8 @@ class GraphicalObjectMetadata(BaseMetadata):
         caption_lines_mods_tag_id, reference_lines_mods_tag_id = cls.find_related_lines_mods_tags_id(tags_element, mods_data)
 
         ns = {
-            "alto": tags_element.nsmap[None],
-            "mods": tags_element.nsmap["mods"],
+            "alto": namespaces[None],
+            "mods": namespaces["mods"],
         }
 
         caption_lines_tags = tags_element.xpath("alto:StructureTag[alto:XmlData/mods:mods[@ID=$mods_id]]", namespaces=ns, mods_id=caption_lines_mods_tag_id) if caption_lines_mods_tag_id else None
@@ -1076,23 +1084,45 @@ class GraphicalObjectMetadata(BaseMetadata):
     @staticmethod
     def from_altoxml_mods_color(mods_data):
         form_elements = mods_data.findall("mods:physicalDescription/mods:form[@type='color']", mods_data.nsmap)
-        if not form_elements:
-            return None
 
         colors = {}
         for form in form_elements:
-            lang = form.attrib.get("lang", None)
+            lang = form.getparent().attrib.get("lang", None)
             text = form.text
 
             if text:
                 text = text.strip()
 
             if lang is not None:
-                lang_enum = language_to_string_mapping_reversed.get(lang, None)
-                if lang_enum is not None:
-                    colors[lang_enum] = text
+                lang = language_to_string_mapping_reversed.get(lang, None)
+
+            colors[lang] = ColorInfo(color_mode=text)
+
+        dominant_color_elements = mods_data.findall("mods:physicalDescription/mods:form[@type='dominant-color']", mods_data.nsmap)
+        for dominant_color_element in dominant_color_elements:
+            lang = dominant_color_element.getparent().attrib.get("lang", None)
+            color_name = dominant_color_element.text.strip() if dominant_color_element.text else None
+
+            if lang is not None:
+                lang = language_to_string_mapping_reversed.get(lang, None)
+
+            extent_element = dominant_color_element.getparent().find("mods:extent[@unit='percentage']", mods_data.nsmap)
+            coverage = None
+            if extent_element is not None:
+                coverage_text = extent_element.text
+                if coverage_text:
+                    try:
+                        coverage = float(coverage_text.strip())
+                    except:
+                        pass
+
+            if lang in colors:
+                if colors[lang].dominant_colors is None:
+                    colors[lang].dominant_colors = []
+
+                colors[lang].dominant_colors.append(DominantColorInfo(name=color_name, coverage=coverage))
             else:
-                colors[None] = text
+                colors[lang] = ColorInfo(color_mode=None, dominant_colors=[DominantColorInfo(name=color_name, coverage=coverage)])
 
         if len(colors) == 1 and None in colors:
             return colors[None]
